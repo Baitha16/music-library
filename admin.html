@@ -310,7 +310,7 @@
       if (!files.length) { emptyState.style.display = 'block'; fileGrid.innerHTML = ''; return; }
       emptyState.style.display = 'none';
       fileGrid.innerHTML = files.map((f, idx) => {
-        const cat = fileCategories[f.name] || categories[0] || 'Uncategorized';
+        const cat = fileCategories[f.name] || '';
         return `<div class="file-card"><div class="file-info"><div class="file-icon">📦</div><div>
           <div class="file-name">${f.name}</div>
           <div class="file-meta">${renderFileCategorySelect(idx, cat)} &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
@@ -359,7 +359,7 @@
         const name = await uploadFileSingle(zipFiles[i]);
         if (name) { fileCategories[name] = cat; count++; }
       }
-      if (count > 0) { await saveSettings(); showToast(`Uploaded ${count} file(s)`); loadFiles(); }
+      if (count > 0) { await saveSettings(); await loadConfig(); loadFiles(); showToast(`Uploaded ${count} file(s)`); }
       else showToast('No files uploaded', 'error');
       uploadArea.style.display = 'block';
       uploadProgress.style.display = 'none';
@@ -380,8 +380,9 @@
         if (name) {
           fileCategories[name] = uploadCatSelect.value;
           await saveSettings();
-          showToast(`Uploaded: ${name} (${files.length} files zipped)`);
+          await loadConfig();
           loadFiles();
+          showToast(`Uploaded: ${name} (${files.length} files zipped)`);
         } else showToast('Upload failed', 'error');
       } catch { showToast('Zip or upload failed', 'error'); }
       uploadArea.style.display = 'block';

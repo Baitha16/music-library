@@ -153,7 +153,7 @@
       emptyState.style.display = 'none';
       fileGrid.innerHTML = filtered.map(f => {
         const cat = getCategory(f.name);
-        const catBadge = cat && currentCategory !== 'All' ? `<span class="cat-badge">${cat}</span>` : '';
+        const catBadge = cat ? `<span class="cat-badge">${cat}</span>` : '';
         return `
           <div class="file-card">
             <div class="file-info">
