@@ -198,7 +198,7 @@
           actionsHtml = `
             <a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>
             <a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-outline btn-sm" download>📄 TXT</a>
-            <button class="btn btn-outline btn-sm" onclick="downloadAsZip(['${midFile.name.replace(/'/g, "\\'")}','${txtFile.name.replace(/'/g, "\\'")}'],'${baseName.replace(/'/g, "\\'")}.zip')">⬇ Both</button>`;
+            <button class="btn btn-outline btn-sm" onclick="downloadAsZip(['${midFile.name.replace(/'/g, "\\'")}','${txtFile.name.replace(/'/g, "\\'")}'],'${baseName.replace(/'/g, "\\'")}.zip')">⬇ Download</button>`;
         } else if (midFile) {
           actionsHtml = `<a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>`;
         } else if (txtFile) {
@@ -215,7 +215,7 @@
         return `
           <div class="file-card">
             <div class="file-info">
-              <div class="file-icon">${fileIcon(fGroup[0].name)}</div>
+                <div class="file-icon">${fileIcon(midFile?.name || txtFile?.name || zipFile?.name || fGroup[0].name)}</div>
               <div>
                 <div class="file-name" title="${fGroup.map(f=>f.name).join(', ')}">${baseName}</div>
                 <div class="file-meta">

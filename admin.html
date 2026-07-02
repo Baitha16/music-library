@@ -466,6 +466,8 @@
       }
       selectedFiles.clear();
       updateBulkBar();
+      // Tunggu sebentar biar Supabase settle
+      await new Promise(r => setTimeout(r, 1000));
       loadFiles();
       showToast(`Deleted ${ok} file(s)` + (fail ? `, ${fail} failed` : ''));
     }
