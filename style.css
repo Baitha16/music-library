@@ -100,6 +100,14 @@ header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 }
 .search-input:focus { border-color: #6c5ce7; }
 .search-input::placeholder { color: var(--text-muted); }
+
+.sort-select {
+  padding: 10px 14px; background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px; outline: none; cursor: pointer;
+  min-width: 120px;
+}
+.sort-select:focus { border-color: #6c5ce7; }
+.sort-select option { background: var(--bg-card); color: var(--text); }
 .btn-danger { background: #e74c3c; color: #fff; }
 .btn-danger:hover { background: #c0392b; }
 .btn-outline {

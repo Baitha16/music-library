@@ -59,7 +59,13 @@
         </div>
       </details>
 
-      <input type="text" id="search-input" class="search-input" placeholder="Search files...">
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input type="text" id="search-input" class="search-input" placeholder="Search files..." style="margin-bottom:0;flex:1">
+        <select id="sort-select" class="sort-select">
+          <option value="name">A-Z</option>
+          <option value="date" selected>Last Upload</option>
+        </select>
+      </div>
 
       <div id="file-list">
         <div class="empty-state" id="empty-state">
@@ -112,10 +118,16 @@
     let pendingCatChanges = false;
     let pendingCategory = 'West';
     let searchQuery = '';
+    let sortMode = 'date';
     const searchInput = document.getElementById('search-input');
     searchInput.addEventListener('input', () => {
       searchQuery = searchInput.value.trim().toLowerCase();
       renderFiles();
+    });
+    const sortSelect = document.getElementById('sort-select');
+    sortSelect.addEventListener('change', () => {
+      sortMode = sortSelect.value;
+      loadFiles();
     });
 
     const loginOverlay = document.getElementById('login-overlay');
@@ -328,9 +340,13 @@
       try {
         const res = await fetch('/api/files');
         const data = await res.json();
-        files = (data.files || []).sort((a, b) =>
-          cleanName(a.name).localeCompare(cleanName(b.name), undefined, { sensitivity: 'base' })
-        );
+        let list = data.files || [];
+        if (sortMode === 'date') {
+          list.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+        } else {
+          list.sort((a, b) => cleanName(a.name).localeCompare(cleanName(b.name), undefined, { sensitivity: 'base' }));
+        }
+        files = list;
         renderFiles();
       } catch (err) { showToast('Failed to load files', 'error'); }
     }
@@ -379,18 +395,39 @@
       } catch { return null; }
     }
 
+    // Save file-category mapping by reading current config from server, adding, then saving
+    async function saveFileCategory(filename, category) {
+      try {
+        const res = await fetch('/api/admin/config');
+        const cfg = await res.json();
+        cfg.fileCategories = cfg.fileCategories || {};
+        cfg.fileCategories[filename] = category;
+        const saveRes = await fetch('/api/admin/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cfg)
+        });
+        return saveRes.ok;
+      } catch { return false; }
+    }
+
     // Upload multiple zips batch
     async function uploadMultipleZips(zipFiles, cat) {
       uploadArea.style.display = 'none';
       uploadProgress.style.display = 'block';
-      let count = 0;
+      const uploaded = [];
       for (let i = 0; i < zipFiles.length; i++) {
         uploadProgressText.textContent = `Uploading ${i+1}/${zipFiles.length}: ${zipFiles[i].name}`;
         const name = await uploadFileSingle(zipFiles[i]);
-        if (name) { fileCategories[name] = cat; count++; }
+        if (name) uploaded.push(name);
       }
-      if (count > 0) { await saveSettings(); loadFiles(); showToast(`Uploaded ${count} file(s) as "${cat}"`); }
-      else showToast('No files uploaded', 'error');
+      if (uploaded.length > 0) {
+        for (const name of uploaded) {
+          fileCategories[name] = cat;
+          await saveFileCategory(name, cat);
+        }
+        loadFiles();
+        showToast(`Uploaded ${uploaded.length} file(s) as "${cat}"`);
+      } else showToast('No files uploaded', 'error');
       uploadArea.style.display = 'block';
       uploadProgress.style.display = 'none';
     }
@@ -409,9 +446,9 @@
         const name = await uploadFileSingle(zipFile);
         if (name) {
           fileCategories[name] = cat;
-          await saveSettings();
+          const ok = await saveFileCategory(name, cat);
           loadFiles();
-          showToast(`Uploaded: ${name} as "${cat}" (${files.length} files zipped)`);
+          showToast(ok ? `Uploaded: ${name} as "${cat}"` : 'Category save issue', ok ? 'success' : 'error');
         } else showToast('Upload failed', 'error');
       } catch { showToast('Zip or upload failed', 'error'); }
       uploadArea.style.display = 'block';
