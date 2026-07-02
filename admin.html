@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Music Library</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>♫ <span>Music</span> Library</h1>
+        <div class="subtitle">Admin Panel</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a href="/" class="btn btn-outline btn-sm">Back to Library</a>
+        <button id="logout-btn" class="btn btn-outline btn-sm" style="display:none">Logout</button>
+      </div>
+    </header>
+
+    <div id="admin-content" style="display:none">
+      <div class="upload-area" id="upload-area">
+        <div class="upload-icon">📂</div>
+        <h3>Upload ZIP file</h3>
+        <p>Click or drag & drop a .zip file here (max 200MB)</p>
+        <input type="file" id="file-input" accept=".zip">
+      </div>
+
+      <div id="upload-progress" style="display:none; text-align:center; padding:20px; color:#888;">
+        <p>Uploading... please wait</p>
+      </div>
+
+      <div id="file-list">
+        <div class="empty-state" id="empty-state">
+          <div class="icon">📦</div>
+          <h3>No files uploaded</h3>
+          <p>Drop a ZIP file above to get started.</p>
+        </div>
+
+        <div class="file-grid" id="file-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="login-overlay">
+    <div class="modal">
+      <h2>Admin Login</h2>
+      <div class="error" id="login-error">Wrong password</div>
+      <input type="password" id="password-input" placeholder="Enter admin password" autocomplete="off">
+      <div class="modal-actions">
+        <a href="/" class="btn btn-outline btn-sm">Cancel</a>
+        <button class="btn btn-primary btn-sm" id="login-btn">Login</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const loginOverlay = document.getElementById('login-overlay');
+    const passwordInput = document.getElementById('password-input');
+    const loginBtn = document.getElementById('login-btn');
+    const loginError = document.getElementById('login-error');
+    const logoutBtn = document.getElementById('logout-btn');
+    const adminContent = document.getElementById('admin-content');
+    const fileGrid = document.getElementById('file-grid');
+    const emptyState = document.getElementById('empty-state');
+    const uploadArea = document.getElementById('upload-area');
+    const uploadProgress = document.getElementById('upload-progress');
+    const fileInput = document.getElementById('file-input');
+
+    let isAdmin = false;
+
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function showToast(msg, type = 'success') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type + ' show';
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/admin/check');
+        const data = await res.json();
+        isAdmin = data.isAdmin;
+        if (isAdmin) {
+          loginOverlay.classList.remove('active');
+          adminContent.style.display = 'block';
+          logoutBtn.style.display = 'inline-flex';
+          loadFiles();
+        } else {
+          loginOverlay.classList.add('active');
+          passwordInput.focus();
+        }
+      } catch (err) {
+        showToast('Connection error', 'error');
+      }
+    }
+
+    async function login() {
+      const pw = passwordInput.value.trim();
+      if (!pw) return;
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw })
+        });
+        if (res.ok) {
+          loginError.style.display = 'none';
+          checkAuth();
+        } else {
+          loginError.style.display = 'block';
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      } catch (err) {
+        showToast('Login failed', 'error');
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/admin/logout', { method: 'POST' });
+      isAdmin = false;
+      adminContent.style.display = 'none';
+      logoutBtn.style.display = 'none';
+      loginOverlay.classList.add('active');
+      passwordInput.value = '';
+      passwordInput.focus();
+    }
+
+    async function loadFiles() {
+      try {
+        const res = await fetch('/api/files');
+        const data = await res.json();
+        const files = data.files;
+
+        if (files.length === 0) {
+          emptyState.style.display = 'block';
+          fileGrid.innerHTML = '';
+          return;
+        }
+
+        emptyState.style.display = 'none';
+        fileGrid.innerHTML = files.map(f => `
+          <div class="file-card" data-file="${f.name}">
+            <div class="file-info">
+              <div class="file-icon">📦</div>
+              <div>
+                <div class="file-name">${f.name}</div>
+                <div class="file-meta">${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
+              </div>
+            </div>
+            <div class="file-actions">
+              <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        showToast('Failed to load files', 'error');
+      }
+    }
+
+    async function deleteFile(filename) {
+      if (!confirm(`Delete "${filename}"?`)) return;
+
+      try {
+        const res = await fetch(`/api/admin/delete?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Deleted: ${filename}`);
+          loadFiles();
+        } else {
+          const data = await res.json();
+          showToast(data.error || 'Delete failed', 'error');
+        }
+      } catch (err) {
+        showToast('Delete failed', 'error');
+      }
+    }
+
+    async function uploadFile(file) {
+      if (!file.name.endsWith('.zip')) {
+        showToast('Only .zip files are allowed', 'error');
+        return;
+      }
+
+      if (file.size > 200 * 1024 * 1024) {
+        showToast('File too large. Max 200MB.', 'error');
+        return;
+      }
+
+      uploadArea.style.display = 'none';
+      uploadProgress.style.display = 'block';
+
+      try {
+        const urlRes = await fetch('/api/admin/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name })
+        });
+
+        if (!urlRes.ok) {
+          const err = await urlRes.json();
+          showToast(err.error || 'Failed to get upload URL', 'error');
+          uploadArea.style.display = 'block';
+          uploadProgress.style.display = 'none';
+          return;
+        }
+
+        const { signedUrl } = await urlRes.json();
+
+        const uploadRes = await fetch(signedUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': 'application/zip' }
+        });
+
+        if (uploadRes.ok) {
+          showToast(`Uploaded: ${file.name}`);
+          loadFiles();
+        } else {
+          showToast('Upload failed', 'error');
+        }
+      } catch (err) {
+        showToast('Upload failed', 'error');
+      }
+
+      uploadArea.style.display = 'block';
+      uploadProgress.style.display = 'none';
+    }
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        uploadFile(e.target.files[0]);
+        e.target.value = '';
+      }
+    });
+
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length) {
+        uploadFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    loginBtn.addEventListener('click', login);
+    passwordInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') login();
+    });
+    logoutBtn.addEventListener('click', logout);
+
+    checkAuth();
+  </script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Library</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>♫ <span>Music</span> Library</h1>
+        <div class="subtitle">Download MIDI & TXT collections</div>
+      </div>
+      <a href="/admin.html" class="btn btn-outline btn-sm">Admin</a>
+    </header>
+
+    <div id="file-list">
+      <div class="empty-state" id="empty-state">
+        <div class="icon">🎵</div>
+        <h3>No files yet</h3>
+        <p>Library is empty. Check back later.</p>
+      </div>
+
+      <div class="file-grid" id="file-grid"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const fileGrid = document.getElementById('file-grid');
+    const emptyState = document.getElementById('empty-state');
+
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    async function loadFiles() {
+      try {
+        const res = await fetch('/api/files');
+        const data = await res.json();
+        const files = data.files;
+
+        if (files.length === 0) {
+          emptyState.style.display = 'block';
+          fileGrid.innerHTML = '';
+          return;
+        }
+
+        emptyState.style.display = 'none';
+        fileGrid.innerHTML = files.map(f => `
+          <div class="file-card">
+            <div class="file-info">
+              <div class="file-icon">📦</div>
+              <div>
+                <div class="file-name">${f.name}</div>
+                <div class="file-meta">${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
+              </div>
+            </div>
+            <div class="file-actions">
+              <a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-primary btn-sm">Download</a>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        showToast('Failed to load files', 'error');
+      }
+    }
+
+    function showToast(msg, type = 'success') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type + ' show';
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    loadFiles();
+  </script>
+</body>
+</html>

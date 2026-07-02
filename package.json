@@ -1,0 +1,8 @@
+{
+  "name": "web-music-library",
+  "version": "1.0.0",
+  "description": "Web Music Library - Upload and share ZIP files via Vercel + Supabase",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0"
+  }
+}
