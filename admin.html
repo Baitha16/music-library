@@ -59,12 +59,20 @@
         </div>
       </details>
 
-      <div style="display:flex;gap:8px;margin-bottom:16px">
-        <input type="text" id="search-input" class="search-input" placeholder="Search files..." style="margin-bottom:0;flex:1">
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <input type="text" id="search-input" class="search-input" placeholder="Search files..." style="margin-bottom:0;flex:1;min-width:180px">
         <select id="sort-select" class="sort-select">
           <option value="name">A-Z</option>
           <option value="date" selected>Last Upload</option>
         </select>
+      </div>
+
+      <div id="bulk-bar" style="display:none;align-items:center;gap:10px;padding:12px 16px;background:var(--bg-card);border:1px solid #6c5ce7;border-radius:10px;margin-bottom:12px;">
+        <span id="bulk-count" style="font-size:14px;color:var(--text)">0 selected</span>
+        <select id="bulk-cat-select" style="padding:6px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;cursor:pointer;flex:1"></select>
+        <button id="bulk-cat-btn" class="btn btn-primary btn-sm">Change Category</button>
+        <button id="bulk-delete-btn" class="btn btn-danger btn-sm">Delete Selected</button>
+        <button id="bulk-clear-btn" class="btn btn-outline btn-sm" style="border-color:var(--text-muted);color:var(--text-muted)">✕</button>
       </div>
 
       <div id="file-list">
@@ -73,8 +81,13 @@
           <h3>No files uploaded</h3>
           <p>Drop a ZIP file above to get started.</p>
         </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px" id="select-all-bar">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer">
+            <input type="checkbox" id="select-all-cb"> Select All
+          </label>
+        </div>
         <div class="file-grid" id="file-grid"></div>
-        <div id="save-cat-bar" style="display:none;position:sticky;bottom:0;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-top:12px;display:none;align-items:center;justify-content:space-between">
+        <div id="save-cat-bar" style="display:none;position:sticky;bottom:0;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-top:12px;align-items:center;justify-content:space-between">
           <span style="font-size:14px;color:var(--text)">🔄 Category changes pending</span>
           <button id="save-cat-btn" class="btn btn-primary btn-sm">Save Changes</button>
         </div>
@@ -119,6 +132,7 @@
     let pendingCategory = 'West';
     let searchQuery = '';
     let sortMode = 'date';
+    let selectedFiles = new Set();
     const searchInput = document.getElementById('search-input');
     searchInput.addEventListener('input', () => {
       searchQuery = searchInput.value.trim().toLowerCase();
@@ -280,6 +294,7 @@
 
     function renderUploadCategorySelect() {
       uploadCatSelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+      renderBulkCatSelect();
     }
 
     function renderFileCategorySelect(filename, currentCat) {
@@ -364,13 +379,15 @@
       emptyState.style.display = 'none';
       fileGrid.innerHTML = filtered.map(f => {
         const cat = fileCategories[f.name] || '';
-        return `<div class="file-card"><div class="file-info"><div class="file-icon">${fileIcon(f.name)}</div><div>
+        const checked = selectedFiles.has(f.name) ? 'checked' : '';
+        return `<div class="file-card"><input type="checkbox" class="file-checkbox" data-filename="${f.name.replace(/"/g, '&quot;')}" ${checked} onchange="toggleSelect('${f.name.replace(/'/g, "\\'")}')"><div class="file-info"><div class="file-icon">${fileIcon(f.name)}</div><div>
           <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
           <div class="file-meta">${renderFileCategorySelect(f.name, cat)} &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
         </div></div><div class="file-actions">
           <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
         </div></div>`
       }).join('');
+      updateBulkBar();
     }
 
     async function deleteFile(filename) {
@@ -379,11 +396,102 @@
         const res = await fetch(`/api/admin/delete?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
         if (res.ok) {
           delete fileCategories[filename];
+          selectedFiles.delete(filename);
           showToast(`Deleted: ${filename}`);
           loadFiles();
         } else { const d = await res.json(); showToast(d.error || 'Delete failed', 'error'); }
       } catch (err) { showToast('Delete failed', 'error'); }
     }
+
+    // ============= MULTI-SELECT & BULK ACTIONS =============
+    function toggleSelect(filename) {
+      if (selectedFiles.has(filename)) selectedFiles.delete(filename);
+      else selectedFiles.add(filename);
+      updateBulkBar();
+      renderFiles();
+    }
+
+    function toggleSelectAll() {
+      const cb = document.getElementById('select-all-cb');
+      const filtered = getFilteredFiles();
+      if (cb.checked) {
+        filtered.forEach(f => selectedFiles.add(f.name));
+      } else {
+        filtered.forEach(f => selectedFiles.delete(f.name));
+      }
+      updateBulkBar();
+      renderFiles();
+    }
+
+    function getFilteredFiles() {
+      const q = searchQuery;
+      const list = files;
+      if (!q) return list;
+      return list.filter(f => cleanName(f.name).toLowerCase().includes(q));
+    }
+
+    function updateBulkBar() {
+      const bar = document.getElementById('bulk-bar');
+      const count = document.getElementById('bulk-count');
+      const sel = document.getElementById('select-all-cb');
+      if (selectedFiles.size === 0) {
+        bar.style.display = 'none';
+        if (sel) sel.checked = false;
+        return;
+      }
+      bar.style.display = 'flex';
+      count.textContent = `${selectedFiles.size} selected`;
+      // update select-all checkbox
+      const filtered = getFilteredFiles();
+      const allSelected = filtered.length > 0 && filtered.every(f => selectedFiles.has(f.name));
+      if (sel) sel.checked = allSelected;
+    }
+
+    function renderBulkCatSelect() {
+      const sel = document.getElementById('bulk-cat-select');
+      sel.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    async function bulkDeleteSelected() {
+      const list = Array.from(selectedFiles);
+      if (!list.length) return;
+      if (!confirm(`Delete ${list.length} selected file(s)?`)) return;
+      let ok = 0, fail = 0;
+      for (const name of list) {
+        try {
+          const res = await fetch(`/api/admin/delete?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+          if (res.ok) { ok++; delete fileCategories[name]; }
+          else fail++;
+        } catch { fail++; }
+      }
+      selectedFiles.clear();
+      updateBulkBar();
+      loadFiles();
+      showToast(`Deleted ${ok} file(s)` + (fail ? `, ${fail} failed` : ''));
+    }
+
+    async function bulkChangeCategory() {
+      const list = Array.from(selectedFiles);
+      if (!list.length) return;
+      const cat = document.getElementById('bulk-cat-select').value;
+      for (const name of list) fileCategories[name] = cat;
+      selectedFiles.clear();
+      updateBulkBar();
+      renderFiles();
+      saveSettings();
+      showToast(`Changed ${list.length} file(s) to "${cat}"`);
+    }
+
+    // Wire up bulk bar
+    document.getElementById('bulk-delete-btn').addEventListener('click', bulkDeleteSelected);
+    document.getElementById('bulk-cat-btn').addEventListener('click', bulkChangeCategory);
+    document.getElementById('bulk-clear-btn').addEventListener('click', () => {
+      selectedFiles.clear();
+      updateBulkBar();
+      renderFiles();
+    });
+    document.getElementById('select-all-cb').addEventListener('change', toggleSelectAll);
+    // =======================================================
 
     // Core upload helper (single file, returns filename on success or null)
     async function uploadFileSingle(file) {

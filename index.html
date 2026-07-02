@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Music Library</title>
   <link rel="stylesheet" href="/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -176,29 +177,80 @@
       }
 
       emptyState.style.display = 'none';
-      fileGrid.innerHTML = filtered.map(f => {
-        const cat = getCategory(f.name);
+
+      // Group by base name
+      const groups = {};
+      filtered.forEach(f => {
+        const base = cleanName(f.name);
+        if (!groups[base]) groups[base] = [];
+        groups[base].push(f);
+      });
+
+      fileGrid.innerHTML = Object.entries(groups).map(([baseName, fGroup]) => {
+        const cat = getCategory(fGroup[0].name);
         const catBadge = cat ? `<span class="cat-badge">${cat}</span>` : '';
+        const midFile = fGroup.find(f => f.name.match(/\.(mid|midi)$/i));
+        const txtFile = fGroup.find(f => f.name.match(/\.txt$/i));
+        const zipFile = fGroup.find(f => f.name.match(/\.zip$/i));
+
+        let actionsHtml = '';
+        if (midFile && txtFile) {
+          actionsHtml = `
+            <a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>
+            <a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-outline btn-sm" download>📄 TXT</a>
+            <button class="btn btn-outline btn-sm" onclick="downloadAsZip(['${midFile.name.replace(/'/g, "\\'")}','${txtFile.name.replace(/'/g, "\\'")}'],'${baseName.replace(/'/g, "\\'")}.zip')">⬇ Both</button>`;
+        } else if (midFile) {
+          actionsHtml = `<a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>`;
+        } else if (txtFile) {
+          actionsHtml = `<a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-primary btn-sm">⬇ Download</a>`;
+        } else if (zipFile) {
+          actionsHtml = `<a href="/api/download?name=${encodeURIComponent(zipFile.name)}" class="btn btn-primary btn-sm">⬇ Download</a>`;
+        } else {
+          // Multiple files without mid/txt/zip — show individual download buttons
+          actionsHtml = fGroup.map(f =>
+            `<a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-outline btn-sm">⬇ ${f.name.split('.').pop()}</a>`
+          ).join('');
+        }
+
         return `
           <div class="file-card">
             <div class="file-info">
-              <div class="file-icon">${fileIcon(f.name)}</div>
+              <div class="file-icon">${fileIcon(fGroup[0].name)}</div>
               <div>
-                <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
+                <div class="file-name" title="${fGroup.map(f=>f.name).join(', ')}">${baseName}</div>
                 <div class="file-meta">
                   ${catBadge}
-                  ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}
+                  ${fGroup.map(f => f.name.split('.').pop()).join(', ').toUpperCase()} &middot; ${formatDate(fGroup[0].uploadedAt)}
                 </div>
               </div>
             </div>
             <div class="file-actions">
-              ${f.name.match(/\.(mid|midi)$/i) 
-                ? `<a href="ezio://load?file=${encodeURIComponent(f.name)}" class="btn btn-primary btn-sm">🎹 Play</a>`
-                : `<a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-primary btn-sm">⬇ Download</a>`}
+              ${actionsHtml}
             </div>
           </div>
         `
       }).join('');
+    }
+
+    async function downloadAsZip(filenames, zipName) {
+      try {
+        const zip = new JSZip();
+        for (const name of filenames) {
+          const resp = await fetch(`/api/download?name=${encodeURIComponent(name)}`);
+          if (!resp.ok) { showToast(`Failed to fetch: ${name}`, 'error'); continue; }
+          const blob = await resp.blob();
+          zip.file(name, blob);
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = zipName;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showToast('Failed to create ZIP', 'error');
+      }
     }
 
     // Tutorial

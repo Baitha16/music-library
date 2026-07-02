@@ -170,6 +170,13 @@ header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 }
 .file-card .file-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: 16px; }
 
+/* File checkbox */
+.file-checkbox {
+  width: 18px; height: 18px; cursor: pointer; accent-color: #6c5ce7;
+  flex-shrink: 0; margin-right: 4px;
+}
+#select-all-cb { width: 18px; height: 18px; cursor: pointer; accent-color: #6c5ce7; }
+
 /* Upload area */
 .upload-area {
   border: 2px dashed var(--border); border-radius: 12px;
