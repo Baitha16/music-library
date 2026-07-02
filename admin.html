@@ -14,8 +14,9 @@
         <h1>♫ <span>Music</span> Library</h1>
         <div class="subtitle">Admin Panel</div>
       </div>
-      <div style="display:flex;gap:8px">
-        <a href="/" class="btn btn-outline btn-sm">Back to Library</a>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button id="theme-toggle" class="btn-icon" title="Toggle theme">🌙</button>
+        <a href="/" class="btn btn-outline btn-sm">Library</a>
         <button id="logout-btn" class="btn btn-outline btn-sm" style="display:none">Logout</button>
       </div>
     </header>
@@ -32,8 +33,8 @@
         </div>
       </div>
 
-      <div id="upload-progress" style="display:none;text-align:center;padding:20px;color:#888">
-        <p>Uploading... please wait</p>
+      <div id="upload-progress" style="display:none;text-align:center;padding:20px;color:var(--text-muted)">
+        <p id="upload-progress-text">Uploading... please wait</p>
       </div>
 
       <details class="settings-panel" id="settings-panel">
@@ -113,12 +114,14 @@
     const emptyState = document.getElementById('empty-state');
     const uploadArea = document.getElementById('upload-area');
     const uploadProgress = document.getElementById('upload-progress');
+    const uploadProgressText = document.getElementById('upload-progress-text');
     const fileInput = document.getElementById('file-input');
     const zipnameOverlay = document.getElementById('zipname-overlay');
     const zipnameInput = document.getElementById('zipname-input');
     const zipnameError = document.getElementById('zipname-error');
     const zipnameConfirm = document.getElementById('zipname-confirm');
     const zipnameCancel = document.getElementById('zipname-cancel');
+    const themeToggle = document.getElementById('theme-toggle');
     let pendingFiles = [];
     const uploadCatSelect = document.getElementById('upload-category-select');
     const categoryList = document.getElementById('category-list');
@@ -127,6 +130,19 @@
     const tutorialTitleInput = document.getElementById('tutorial-title-input');
     const tutorialContentInput = document.getElementById('tutorial-content-input');
     const saveSettingsBtn = document.getElementById('save-settings-btn');
+
+    // Theme
+    function initTheme() {
+      const isLight = localStorage.getItem('theme') === 'light';
+      document.body.classList.toggle('light-mode', isLight);
+      themeToggle.textContent = isLight ? '☀️' : '🌙';
+    }
+    themeToggle.addEventListener('click', () => {
+      const isLight = document.body.classList.toggle('light-mode');
+      localStorage.setItem('theme', isLight ? 'light' : 'dark');
+      themeToggle.textContent = isLight ? '☀️' : '🌙';
+    });
+    initTheme();
 
     function formatSize(bytes) {
       if (bytes === 0) return '0 B';
@@ -218,8 +234,7 @@
 
     function renderCategoryList() {
       categoryList.innerHTML = categories.map((c, i) => `
-        <div class="category-item">
-          <span>${c}</span>
+        <div class="category-item"><span>${c}</span>
           <button class="btn btn-danger btn-sm" onclick="removeCategory(${i})">✕</button>
         </div>
       `).join('');
@@ -249,10 +264,7 @@
     addCatBtn.addEventListener('click', () => {
       const name = newCatInput.value.trim();
       if (!name) return;
-      if (categories.includes(name)) {
-        showToast('Category already exists', 'error');
-        return;
-      }
+      if (categories.includes(name)) { showToast('Category already exists', 'error'); return; }
       categories.push(name);
       newCatInput.value = '';
       renderCategoryList();
@@ -262,37 +274,27 @@
     });
 
     function changeFileCategory(fileIdx, newCat) {
-      const f = files[fileIdx];
-      if (!f) return;
+      const f = files[fileIdx]; if (!f) return;
       fileCategories[f.name] = newCat;
       renderFiles();
     }
 
     async function saveSettings() {
-      configData.categories = categories;
-      configData.fileCategories = fileCategories;
+      configData.categories = [...categories];
+      configData.fileCategories = { ...fileCategories };
       configData.tutorial = {
         title: tutorialTitleInput.value.trim() || 'Tutorial',
         content: tutorialContentInput.value
       };
-
       try {
         const res = await fetch('/api/admin/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(configData)
         });
-        if (res.ok) {
-          showToast('Settings saved');
-        } else {
-          const err = await res.json();
-          showToast(err.error || 'Save failed', 'error');
-        }
-      } catch (err) {
-        showToast('Save failed', 'error');
-      }
+        if (res.ok) showToast('Settings saved');
+        else { const e = await res.json(); showToast(e.error || 'Save failed', 'error'); }
+      } catch (err) { showToast('Save failed', 'error'); }
     }
-
     saveSettingsBtn.addEventListener('click', saveSettings);
 
     async function loadFiles() {
@@ -301,37 +303,20 @@
         const data = await res.json();
         files = data.files || [];
         renderFiles();
-      } catch (err) {
-        showToast('Failed to load files', 'error');
-      }
+      } catch (err) { showToast('Failed to load files', 'error'); }
     }
 
     function renderFiles() {
-      if (files.length === 0) {
-        emptyState.style.display = 'block';
-        fileGrid.innerHTML = '';
-        return;
-      }
+      if (!files.length) { emptyState.style.display = 'block'; fileGrid.innerHTML = ''; return; }
       emptyState.style.display = 'none';
       fileGrid.innerHTML = files.map((f, idx) => {
         const cat = fileCategories[f.name] || categories[0] || 'Uncategorized';
-        return `
-          <div class="file-card">
-            <div class="file-info">
-              <div class="file-icon">📦</div>
-              <div>
-                <div class="file-name">${f.name}</div>
-                <div class="file-meta">
-                  ${renderFileCategorySelect(idx, cat)}
-                  &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}
-                </div>
-              </div>
-            </div>
-            <div class="file-actions">
-              <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
-            </div>
-          </div>
-        `
+        return `<div class="file-card"><div class="file-info"><div class="file-icon">📦</div><div>
+          <div class="file-name">${f.name}</div>
+          <div class="file-meta">${renderFileCategorySelect(idx, cat)} &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
+        </div></div><div class="file-actions">
+          <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
+        </div></div>`
       }).join('');
     }
 
@@ -343,132 +328,77 @@
           delete fileCategories[filename];
           showToast(`Deleted: ${filename}`);
           loadFiles();
-        } else {
-          const data = await res.json();
-          showToast(data.error || 'Delete failed', 'error');
-        }
-      } catch (err) {
-        showToast('Delete failed', 'error');
-      }
+        } else { const d = await res.json(); showToast(d.error || 'Delete failed', 'error'); }
+      } catch (err) { showToast('Delete failed', 'error'); }
     }
 
-    async function uploadFile(file) {
-      if (!file.name.endsWith('.zip')) {
-        showToast('Only .zip files are allowed', 'error');
-        return;
-      }
-      if (file.size > 200 * 1024 * 1024) {
-        showToast('File too large. Max 200MB.', 'error');
-        return;
-      }
-
-      uploadArea.style.display = 'none';
-      uploadProgress.style.display = 'block';
-
+    // Core upload helper (single file, returns filename on success or null)
+    async function uploadFileSingle(file) {
+      if (!file.name.endsWith('.zip')) { showToast('Only .zip allowed', 'error'); return null; }
+      if (file.size > 200 * 1024 * 1024) { showToast(`${file.name}: too large`, 'error'); return null; }
       try {
         const urlRes = await fetch('/api/admin/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.name })
         });
-
-        if (!urlRes.ok) {
-          const err = await urlRes.json();
-          showToast(err.error || 'Failed to get upload URL', 'error');
-          uploadArea.style.display = 'block';
-          uploadProgress.style.display = 'none';
-          return;
-        }
-
+        if (!urlRes.ok) { const e = await urlRes.json(); showToast(e.error || 'Upload URL failed', 'error'); return null; }
         const { signedUrl } = await urlRes.json();
+        const upRes = await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': 'application/zip' } });
+        return upRes.ok ? file.name : null;
+      } catch { return null; }
+    }
 
-        const uploadRes = await fetch(signedUrl, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': 'application/zip' }
-        });
-
-        if (uploadRes.ok) {
-          const cat = uploadCatSelect.value;
-          fileCategories[file.name] = cat;
-          await saveSettings();
-          showToast(`Uploaded: ${file.name}`);
-          loadFiles();
-        } else {
-          showToast('Upload failed', 'error');
-        }
-      } catch (err) {
-        showToast('Upload failed', 'error');
+    // Upload multiple zips batch
+    async function uploadMultipleZips(zipFiles) {
+      uploadArea.style.display = 'none';
+      uploadProgress.style.display = 'block';
+      const cat = uploadCatSelect.value;
+      let count = 0;
+      for (let i = 0; i < zipFiles.length; i++) {
+        uploadProgressText.textContent = `Uploading ${i+1}/${zipFiles.length}: ${zipFiles[i].name}`;
+        const name = await uploadFileSingle(zipFiles[i]);
+        if (name) { fileCategories[name] = cat; count++; }
       }
-
+      if (count > 0) { await saveSettings(); showToast(`Uploaded ${count} file(s)`); loadFiles(); }
+      else showToast('No files uploaded', 'error');
       uploadArea.style.display = 'block';
       uploadProgress.style.display = 'none';
     }
 
+    // Auto-zip non-zip files then upload
     async function autoZipAndUpload(files, zipName) {
       uploadArea.style.display = 'none';
       uploadProgress.style.display = 'block';
-
+      uploadProgressText.textContent = 'Zipping files...';
       try {
         const zip = new JSZip();
-        for (const f of files) {
-          zip.file(f.name, f);
-        }
+        for (const f of files) zip.file(f.name, f);
         const blob = await zip.generateAsync({ type: 'blob' });
         const zipFile = new File([blob], zipName, { type: 'application/zip' });
-
-        const urlRes = await fetch('/api/admin/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: zipFile.name })
-        });
-
-        if (!urlRes.ok) {
-          const err = await urlRes.json();
-          showToast(err.error || 'Failed to get upload URL', 'error');
-          uploadArea.style.display = 'block';
-          uploadProgress.style.display = 'none';
-          return;
-        }
-
-        const { signedUrl } = await urlRes.json();
-
-        const uploadRes = await fetch(signedUrl, {
-          method: 'PUT',
-          body: zipFile,
-          headers: { 'Content-Type': 'application/zip' }
-        });
-
-        if (uploadRes.ok) {
-          const cat = uploadCatSelect.value;
-          fileCategories[zipFile.name] = cat;
+        uploadProgressText.textContent = 'Uploading...';
+        const name = await uploadFileSingle(zipFile);
+        if (name) {
+          fileCategories[name] = uploadCatSelect.value;
           await saveSettings();
-          showToast(`Uploaded: ${zipFile.name} (${files.length} files zipped)`);
+          showToast(`Uploaded: ${name} (${files.length} files zipped)`);
           loadFiles();
-        } else {
-          showToast('Upload failed', 'error');
-        }
-      } catch (err) {
-        showToast('Zip or upload failed', 'error');
-      }
-
+        } else showToast('Upload failed', 'error');
+      } catch { showToast('Zip or upload failed', 'error'); }
       uploadArea.style.display = 'block';
       uploadProgress.style.display = 'none';
     }
 
     function handleSelectedFiles(selectedFiles) {
       const arr = Array.from(selectedFiles);
-
-      if (arr.length === 1 && arr[0].name.endsWith('.zip')) {
-        uploadFile(arr[0]);
+      if (!arr.length) return;
+      const allZip = arr.every(f => f.name.endsWith('.zip'));
+      if (allZip) { uploadMultipleZips(arr); return; }
+      if (arr.some(f => f.name.endsWith('.zip'))) {
+        showToast('Cannot mix .zip with other file types. Upload separately.', 'error');
         return;
       }
-
-      if (arr.length === 0) return;
-
       pendingFiles = arr;
-      const baseName = arr[0].name.replace(/\.[^/.]+$/, '');
-      zipnameInput.value = baseName + '.zip';
+      zipnameInput.value = arr[0].name.replace(/\.[^/.]+$/, '') + '.zip';
       zipnameError.style.display = 'none';
       zipnameOverlay.classList.add('active');
       zipnameInput.focus();
@@ -477,57 +407,31 @@
 
     zipnameConfirm.addEventListener('click', () => {
       const name = zipnameInput.value.trim();
-      if (!name) {
-        zipnameError.style.display = 'block';
-        return;
-      }
-      let finalName = name;
-      if (!finalName.endsWith('.zip')) finalName += '.zip';
+      if (!name) { zipnameError.style.display = 'block'; return; }
       zipnameOverlay.classList.remove('active');
-      autoZipAndUpload(pendingFiles, finalName);
+      autoZipAndUpload(pendingFiles, name.endsWith('.zip') ? name : name + '.zip');
     });
-
-    zipnameCancel.addEventListener('click', () => {
-      zipnameOverlay.classList.remove('active');
-      pendingFiles = [];
-    });
-
-    zipnameInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') zipnameConfirm.click();
-    });
+    zipnameCancel.addEventListener('click', () => { zipnameOverlay.classList.remove('active'); pendingFiles = []; });
+    zipnameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') zipnameConfirm.click(); });
 
     uploadArea.addEventListener('click', (e) => {
-      if (e.target.tagName !== 'SELECT' && e.target.tagName !== 'LABEL' && !e.target.closest('.upload-category')) {
+      if (e.target.tagName !== 'SELECT' && e.target.tagName !== 'LABEL' && !e.target.closest('.upload-category'))
         fileInput.click();
-      }
     });
     fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length) {
-        handleSelectedFiles(e.target.files);
-        e.target.value = '';
-      }
+      if (e.target.files.length) { handleSelectedFiles(e.target.files); e.target.value = ''; }
     });
-    uploadArea.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadArea.classList.add('dragover');
-    });
-    uploadArea.addEventListener('dragleave', () => {
-      uploadArea.classList.remove('dragover');
-    });
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', () => { uploadArea.classList.remove('dragover'); });
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
       uploadArea.classList.remove('dragover');
-      if (e.dataTransfer.files.length) {
-        handleSelectedFiles(e.dataTransfer.files);
-      }
+      if (e.dataTransfer.files.length) handleSelectedFiles(e.dataTransfer.files);
     });
 
     loginBtn.addEventListener('click', login);
-    passwordInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') login();
-    });
+    passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
     logoutBtn.addEventListener('click', logout);
-
     checkAuth();
   </script>
 </body>

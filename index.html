@@ -20,7 +20,10 @@
           Discord
         </a>
       </div>
-      <a href="/admin.html" class="btn-admin-link" title="Admin">⚙</a>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button id="theme-toggle" class="btn-icon" title="Toggle theme">🌙</button>
+        <a href="/admin.html" class="btn-admin-link" title="Admin">⚙</a>
+      </div>
     </header>
 
     <div class="tabs" id="category-tabs"></div>
@@ -51,6 +54,20 @@
   <script>
     let categories = ['All'];
     let fileCategories = {};
+
+    const themeToggle = document.getElementById('theme-toggle');
+
+    function initTheme() {
+      const isLight = localStorage.getItem('theme') === 'light';
+      document.body.classList.toggle('light-mode', isLight);
+      themeToggle.textContent = isLight ? '☀️' : '🌙';
+    }
+    themeToggle.addEventListener('click', () => {
+      const isLight = document.body.classList.toggle('light-mode');
+      localStorage.setItem('theme', isLight ? 'light' : 'dark');
+      themeToggle.textContent = isLight ? '☀️' : '🌙';
+    });
+    initTheme();
 
     const fileGrid = document.getElementById('file-grid');
     const emptyState = document.getElementById('empty-state');
