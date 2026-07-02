@@ -103,6 +103,7 @@
     let configData = {};
     let files = [];
     let isAdmin = false;
+    let selectedCategory = 'West';
 
     const loginOverlay = document.getElementById('login-overlay');
     const passwordInput = document.getElementById('password-input');
@@ -246,7 +247,16 @@
 
     function renderUploadCategorySelect() {
       uploadCatSelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+      if (!uploadCatSelect.value || !categories.includes(uploadCatSelect.value)) {
+        uploadCatSelect.value = selectedCategory;
+      } else {
+        selectedCategory = uploadCatSelect.value;
+      }
     }
+
+    uploadCatSelect.addEventListener('change', () => {
+      selectedCategory = uploadCatSelect.value;
+    });
 
     function renderFileCategorySelect(fileIdx, currentCat) {
       return `<select onchange="changeFileCategory(${fileIdx}, this.value)" class="cat-select">
@@ -358,12 +368,11 @@
     async function uploadMultipleZips(zipFiles) {
       uploadArea.style.display = 'none';
       uploadProgress.style.display = 'block';
-      const cat = uploadCatSelect.value;
       let count = 0;
       for (let i = 0; i < zipFiles.length; i++) {
         uploadProgressText.textContent = `Uploading ${i+1}/${zipFiles.length}: ${zipFiles[i].name}`;
         const name = await uploadFileSingle(zipFiles[i]);
-        if (name) { fileCategories[name] = cat; count++; }
+        if (name) { fileCategories[name] = selectedCategory; count++; }
       }
       if (count > 0) { await saveSettings(); await loadConfig(); loadFiles(); showToast(`Uploaded ${count} file(s)`); }
       else showToast('No files uploaded', 'error');
@@ -384,7 +393,7 @@
         uploadProgressText.textContent = 'Uploading...';
         const name = await uploadFileSingle(zipFile);
         if (name) {
-          fileCategories[name] = uploadCatSelect.value;
+          fileCategories[name] = selectedCategory;
           await saveSettings();
           await loadConfig();
           loadFiles();
