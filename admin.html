@@ -25,11 +25,37 @@
         <h3>Upload ZIP file</h3>
         <p>Click or drag & drop a .zip file here (max 200MB)</p>
         <input type="file" id="file-input" accept=".zip">
+        <div class="upload-category">
+          <label>Category:</label>
+          <select id="upload-category-select"></select>
+        </div>
       </div>
 
-      <div id="upload-progress" style="display:none; text-align:center; padding:20px; color:#888;">
+      <div id="upload-progress" style="display:none;text-align:center;padding:20px;color:#888">
         <p>Uploading... please wait</p>
       </div>
+
+      <details class="settings-panel" id="settings-panel">
+        <summary>⚙️ Settings</summary>
+        <div class="settings-body">
+          <div class="settings-section">
+            <h4>Categories</h4>
+            <div id="category-list"></div>
+            <div class="add-category">
+              <input type="text" id="new-category-input" placeholder="Add new category">
+              <button class="btn btn-primary btn-sm" id="add-category-btn">Add</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h4>Tutorial</h4>
+            <label style="font-size:13px;color:#888">Title</label>
+            <input type="text" id="tutorial-title-input" class="settings-input">
+            <label style="font-size:13px;color:#888;margin-top:8px">Content</label>
+            <textarea id="tutorial-content-input" rows="6" class="settings-textarea"></textarea>
+          </div>
+          <button class="btn btn-primary" id="save-settings-btn" style="margin-top:12px">Save Settings</button>
+        </div>
+      </details>
 
       <div id="file-list">
         <div class="empty-state" id="empty-state">
@@ -37,7 +63,6 @@
           <h3>No files uploaded</h3>
           <p>Drop a ZIP file above to get started.</p>
         </div>
-
         <div class="file-grid" id="file-grid"></div>
       </div>
     </div>
@@ -58,6 +83,12 @@
   <div class="toast" id="toast"></div>
 
   <script>
+    let categories = ['West', 'Indo', 'Phonk', 'Anime & Japan'];
+    let fileCategories = {};
+    let configData = {};
+    let files = [];
+    let isAdmin = false;
+
     const loginOverlay = document.getElementById('login-overlay');
     const passwordInput = document.getElementById('password-input');
     const loginBtn = document.getElementById('login-btn');
@@ -69,8 +100,13 @@
     const uploadArea = document.getElementById('upload-area');
     const uploadProgress = document.getElementById('upload-progress');
     const fileInput = document.getElementById('file-input');
-
-    let isAdmin = false;
+    const uploadCatSelect = document.getElementById('upload-category-select');
+    const categoryList = document.getElementById('category-list');
+    const newCatInput = document.getElementById('new-category-input');
+    const addCatBtn = document.getElementById('add-category-btn');
+    const tutorialTitleInput = document.getElementById('tutorial-title-input');
+    const tutorialContentInput = document.getElementById('tutorial-content-input');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
 
     function formatSize(bytes) {
       if (bytes === 0) return '0 B';
@@ -101,7 +137,8 @@
           loginOverlay.classList.remove('active');
           adminContent.style.display = 'block';
           logoutBtn.style.display = 'inline-flex';
-          loadFiles();
+          await loadConfig();
+          await loadFiles();
         } else {
           loginOverlay.classList.add('active');
           passwordInput.focus();
@@ -143,44 +180,147 @@
       passwordInput.focus();
     }
 
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/admin/config');
+        const cfg = await res.json();
+        configData = cfg;
+        categories = cfg.categories || ['West', 'Indo', 'Phonk', 'Anime & Japan'];
+        fileCategories = cfg.fileCategories || {};
+        tutorialTitleInput.value = cfg.tutorial?.title || '';
+        tutorialContentInput.value = cfg.tutorial?.content || '';
+        renderCategoryList();
+        renderUploadCategorySelect();
+      } catch (err) {
+        showToast('Failed to load settings', 'error');
+      }
+    }
+
+    function renderCategoryList() {
+      categoryList.innerHTML = categories.map((c, i) => `
+        <div class="category-item">
+          <span>${c}</span>
+          <button class="btn btn-danger btn-sm" onclick="removeCategory(${i})">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function renderUploadCategorySelect() {
+      uploadCatSelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    function renderFileCategorySelect(fileIdx, currentCat) {
+      return `<select onchange="changeFileCategory(${fileIdx}, this.value)" class="cat-select">
+        ${categories.map(c => `<option value="${c}" ${c === currentCat ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>`;
+    }
+
+    function removeCategory(index) {
+      const cat = categories[index];
+      categories.splice(index, 1);
+      Object.keys(fileCategories).forEach(f => {
+        if (fileCategories[f] === cat) delete fileCategories[f];
+      });
+      renderCategoryList();
+      renderUploadCategorySelect();
+      renderFiles();
+    }
+
+    addCatBtn.addEventListener('click', () => {
+      const name = newCatInput.value.trim();
+      if (!name) return;
+      if (categories.includes(name)) {
+        showToast('Category already exists', 'error');
+        return;
+      }
+      categories.push(name);
+      newCatInput.value = '';
+      renderCategoryList();
+      renderUploadCategorySelect();
+      renderFiles();
+      showToast(`Added category: ${name}`);
+    });
+
+    function changeFileCategory(fileIdx, newCat) {
+      const f = files[fileIdx];
+      if (!f) return;
+      fileCategories[f.name] = newCat;
+      renderFiles();
+    }
+
+    async function saveSettings() {
+      configData.categories = categories;
+      configData.fileCategories = fileCategories;
+      configData.tutorial = {
+        title: tutorialTitleInput.value.trim() || 'Tutorial',
+        content: tutorialContentInput.value
+      };
+
+      try {
+        const res = await fetch('/api/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(configData)
+        });
+        if (res.ok) {
+          showToast('Settings saved');
+        } else {
+          const err = await res.json();
+          showToast(err.error || 'Save failed', 'error');
+        }
+      } catch (err) {
+        showToast('Save failed', 'error');
+      }
+    }
+
+    saveSettingsBtn.addEventListener('click', saveSettings);
+
     async function loadFiles() {
       try {
         const res = await fetch('/api/files');
         const data = await res.json();
-        const files = data.files;
+        files = data.files || [];
+        renderFiles();
+      } catch (err) {
+        showToast('Failed to load files', 'error');
+      }
+    }
 
-        if (files.length === 0) {
-          emptyState.style.display = 'block';
-          fileGrid.innerHTML = '';
-          return;
-        }
-
-        emptyState.style.display = 'none';
-        fileGrid.innerHTML = files.map(f => `
-          <div class="file-card" data-file="${f.name}">
+    function renderFiles() {
+      if (files.length === 0) {
+        emptyState.style.display = 'block';
+        fileGrid.innerHTML = '';
+        return;
+      }
+      emptyState.style.display = 'none';
+      fileGrid.innerHTML = files.map((f, idx) => {
+        const cat = fileCategories[f.name] || categories[0] || 'Uncategorized';
+        return `
+          <div class="file-card">
             <div class="file-info">
               <div class="file-icon">📦</div>
               <div>
                 <div class="file-name">${f.name}</div>
-                <div class="file-meta">${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
+                <div class="file-meta">
+                  ${renderFileCategorySelect(idx, cat)}
+                  &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}
+                </div>
               </div>
             </div>
             <div class="file-actions">
               <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
             </div>
           </div>
-        `).join('');
-      } catch (err) {
-        showToast('Failed to load files', 'error');
-      }
+        `
+      }).join('');
     }
 
     async function deleteFile(filename) {
       if (!confirm(`Delete "${filename}"?`)) return;
-
       try {
         const res = await fetch(`/api/admin/delete?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
         if (res.ok) {
+          delete fileCategories[filename];
           showToast(`Deleted: ${filename}`);
           loadFiles();
         } else {
@@ -197,7 +337,6 @@
         showToast('Only .zip files are allowed', 'error');
         return;
       }
-
       if (file.size > 200 * 1024 * 1024) {
         showToast('File too large. Max 200MB.', 'error');
         return;
@@ -230,6 +369,9 @@
         });
 
         if (uploadRes.ok) {
+          const cat = uploadCatSelect.value;
+          fileCategories[file.name] = cat;
+          await saveSettings();
           showToast(`Uploaded: ${file.name}`);
           loadFiles();
         } else {
@@ -243,14 +385,17 @@
       uploadProgress.style.display = 'none';
     }
 
-    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'SELECT' && e.target.tagName !== 'LABEL' && !e.target.closest('.upload-category')) {
+        fileInput.click();
+      }
+    });
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length) {
         uploadFile(e.target.files[0]);
         e.target.value = '';
       }
     });
-
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
       uploadArea.classList.add('dragover');

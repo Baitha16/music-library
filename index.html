@@ -13,8 +13,13 @@
         <h1>♫ <span>Music</span> Library</h1>
         <div class="subtitle">Download MIDI & TXT collections</div>
       </div>
-      <a href="/admin.html" class="btn btn-outline btn-sm">Admin</a>
+      <div style="display:flex;gap:8px">
+        <button id="tutorial-btn" class="btn btn-outline btn-sm">Tutorial</button>
+        <a href="/admin.html" class="btn btn-outline btn-sm">Admin</a>
+      </div>
     </header>
+
+    <div class="tabs" id="category-tabs"></div>
 
     <div id="file-list">
       <div class="empty-state" id="empty-state">
@@ -27,11 +32,30 @@
     </div>
   </div>
 
+  <div class="overlay" id="tutorial-overlay">
+    <div class="modal" style="max-width:500px">
+      <h2 id="tutorial-title">Tutorial</h2>
+      <div id="tutorial-content" style="white-space:pre-wrap;color:#aaa;font-size:14px;line-height:1.6;margin-bottom:16px"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary btn-sm" id="tutorial-close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
+    let categories = ['All'];
+    let fileCategories = {};
+
     const fileGrid = document.getElementById('file-grid');
     const emptyState = document.getElementById('empty-state');
+    const tabs = document.getElementById('category-tabs');
+    const tutorialBtn = document.getElementById('tutorial-btn');
+    const tutorialOverlay = document.getElementById('tutorial-overlay');
+    const tutorialTitle = document.getElementById('tutorial-title');
+    const tutorialContent = document.getElementById('tutorial-content');
+    const tutorialClose = document.getElementById('tutorial-close');
 
     function formatSize(bytes) {
       if (bytes === 0) return '0 B';
@@ -46,37 +70,94 @@
       return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     }
 
+    function getCategory(filename) {
+      return fileCategories[filename] || 'Uncategorized';
+    }
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        categories = ['All', ...(config.categories || [])];
+        fileCategories = config.fileCategories || {};
+        if (config.tutorial) {
+          tutorialTitle.textContent = config.tutorial.title || 'Tutorial';
+          tutorialContent.textContent = config.tutorial.content || '';
+        }
+        renderTabs();
+      } catch (err) {
+        console.error('Failed to load config');
+      }
+    }
+
+    function renderTabs() {
+      tabs.innerHTML = categories.map(c => `
+        <button class="tab ${c === 'All' ? 'active' : ''}" data-category="${c}" onclick="filterCategory('${c}')">${c}</button>
+      `).join('');
+    }
+
+    let currentCategory = 'All';
+
+    function filterCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab[data-category="${cat}"]`)?.classList.add('active');
+      renderFiles();
+    }
+
     async function loadFiles() {
       try {
         const res = await fetch('/api/files');
         const data = await res.json();
-        const files = data.files;
+        window.allFiles = data.files || [];
+        renderFiles();
+      } catch (err) {
+        showToast('Failed to load files', 'error');
+      }
+    }
 
-        if (files.length === 0) {
-          emptyState.style.display = 'block';
-          fileGrid.innerHTML = '';
-          return;
-        }
+    function renderFiles() {
+      const files = window.allFiles || [];
+      let filtered = files;
+      if (currentCategory !== 'All') {
+        filtered = files.filter(f => getCategory(f.name) === currentCategory);
+      }
 
-        emptyState.style.display = 'none';
-        fileGrid.innerHTML = files.map(f => `
+      if (filtered.length === 0) {
+        emptyState.style.display = 'block';
+        fileGrid.innerHTML = '';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      fileGrid.innerHTML = filtered.map(f => {
+        const cat = getCategory(f.name);
+        return `
           <div class="file-card">
             <div class="file-info">
               <div class="file-icon">📦</div>
               <div>
                 <div class="file-name">${f.name}</div>
-                <div class="file-meta">${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
+                <div class="file-meta">
+                  <span class="cat-badge">${cat}</span>
+                  ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}
+                </div>
               </div>
             </div>
             <div class="file-actions">
               <a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-primary btn-sm">Download</a>
             </div>
           </div>
-        `).join('');
-      } catch (err) {
-        showToast('Failed to load files', 'error');
-      }
+        `
+      }).join('');
     }
+
+    // Tutorial
+    tutorialBtn.addEventListener('click', () => tutorialOverlay.classList.add('active'));
+    tutorialClose.addEventListener('click', () => tutorialOverlay.classList.remove('active'));
+    tutorialOverlay.addEventListener('click', (e) => {
+      if (e.target === tutorialOverlay) tutorialOverlay.classList.remove('active');
+    });
 
     function showToast(msg, type = 'success') {
       const t = document.getElementById('toast');
@@ -85,7 +166,7 @@
       setTimeout(() => t.classList.remove('show'), 3000);
     }
 
-    loadFiles();
+    Promise.all([loadConfig(), loadFiles()]);
   </script>
 </body>
 </html>
