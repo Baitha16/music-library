@@ -145,7 +145,7 @@
     initTheme();
 
     function cleanName(name) {
-      return name.replace(/\.zip$/i, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+      return name.replace(/\.zip$/i, '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
     function formatSize(bytes) {
