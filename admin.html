@@ -144,6 +144,10 @@
     });
     initTheme();
 
+    function cleanName(name) {
+      return name.replace(/\.zip$/i, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
     function formatSize(bytes) {
       if (bytes === 0) return '0 B';
       const k = 1024;
@@ -301,7 +305,9 @@
       try {
         const res = await fetch('/api/files');
         const data = await res.json();
-        files = data.files || [];
+        files = (data.files || []).sort((a, b) =>
+          cleanName(a.name).localeCompare(cleanName(b.name), undefined, { sensitivity: 'base' })
+        );
         renderFiles();
       } catch (err) { showToast('Failed to load files', 'error'); }
     }
@@ -312,7 +318,7 @@
       fileGrid.innerHTML = files.map((f, idx) => {
         const cat = fileCategories[f.name] || '';
         return `<div class="file-card"><div class="file-info"><div class="file-icon">📦</div><div>
-          <div class="file-name">${f.name}</div>
+          <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
           <div class="file-meta">${renderFileCategorySelect(idx, cat)} &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
         </div></div><div class="file-actions">
           <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
