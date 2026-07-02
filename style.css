@@ -90,6 +90,16 @@ header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 .btn-icon:hover { color: var(--text-heading); }
 
 .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+/* Search input */
+.search-input {
+  width: 100%; padding: 10px 16px; margin-bottom: 16px;
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 14px;
+  outline: none; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: #6c5ce7; }
+.search-input::placeholder { color: var(--text-muted); }
 .btn-danger { background: #e74c3c; color: #fff; }
 .btn-danger:hover { background: #c0392b; }
 .btn-outline {

@@ -26,6 +26,8 @@
       </div>
     </header>
 
+    <input type="text" id="search-input" class="search-input" placeholder="Search files...">
+
     <div class="tabs" id="category-tabs"></div>
 
     <div id="file-list">
@@ -123,6 +125,13 @@
     }
 
     let currentCategory = 'All';
+    let searchQuery = '';
+
+    const searchInput = document.getElementById('search-input');
+    searchInput.addEventListener('input', () => {
+      searchQuery = searchInput.value.trim().toLowerCase();
+      renderFiles();
+    });
 
     function filterCategory(cat) {
       currentCategory = cat;
@@ -149,6 +158,9 @@
       let filtered = files;
       if (currentCategory !== 'All') {
         filtered = files.filter(f => getCategory(f.name) === currentCategory);
+      }
+      if (searchQuery) {
+        filtered = filtered.filter(f => cleanName(f.name).toLowerCase().includes(searchQuery));
       }
 
       if (filtered.length === 0) {

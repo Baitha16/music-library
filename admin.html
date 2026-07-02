@@ -59,6 +59,8 @@
         </div>
       </details>
 
+      <input type="text" id="search-input" class="search-input" placeholder="Search files...">
+
       <div id="file-list">
         <div class="empty-state" id="empty-state">
           <div class="icon">📦</div>
@@ -109,6 +111,12 @@
     let isAdmin = false;
     let selectedCategory = 'West';
     let pendingCatChanges = false;
+    let searchQuery = '';
+    const searchInput = document.getElementById('search-input');
+    searchInput.addEventListener('input', () => {
+      searchQuery = searchInput.value.trim().toLowerCase();
+      renderFiles();
+    });
 
     const loginOverlay = document.getElementById('login-overlay');
     const passwordInput = document.getElementById('password-input');
@@ -265,8 +273,8 @@
       selectedCategory = uploadCatSelect.value;
     });
 
-    function renderFileCategorySelect(fileIdx, currentCat) {
-      return `<select onchange="changeFileCategory(${fileIdx}, this.value)" class="cat-select">
+    function renderFileCategorySelect(filename, currentCat) {
+      return `<select onchange="changeFileCategory('${filename.replace(/'/g, "\\'")}', this.value)" class="cat-select">
         ${categories.map(c => `<option value="${c}" ${c === currentCat ? 'selected' : ''}>${c}</option>`).join('')}
       </select>`;
     }
@@ -294,9 +302,8 @@
       showToast(`Added category: ${name}`);
     });
 
-    function changeFileCategory(fileIdx, newCat) {
-      const f = files[fileIdx]; if (!f) return;
-      fileCategories[f.name] = newCat;
+    function changeFileCategory(filename, newCat) {
+      fileCategories[filename] = newCat;
       pendingCatChanges = true;
       saveCatBar.style.display = 'flex';
       renderFiles();
@@ -338,13 +345,15 @@
     }
 
     function renderFiles() {
-      if (!files.length) { emptyState.style.display = 'block'; fileGrid.innerHTML = ''; return; }
+      const filtered = searchQuery ? files.filter(f => cleanName(f.name).toLowerCase().includes(searchQuery)) : files;
+      if (!filtered.length && !files.length) { emptyState.style.display = 'block'; fileGrid.innerHTML = ''; return; }
+      if (!filtered.length) { emptyState.style.display = 'block'; emptyState.innerHTML = '<div class="icon">🔍</div><h3>No results</h3><p>Try a different search query.</p>'; fileGrid.innerHTML = ''; return; }
       emptyState.style.display = 'none';
-      fileGrid.innerHTML = files.map((f, idx) => {
+      fileGrid.innerHTML = filtered.map(f => {
         const cat = fileCategories[f.name] || '';
         return `<div class="file-card"><div class="file-info"><div class="file-icon">📦</div><div>
           <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
-          <div class="file-meta">${renderFileCategorySelect(idx, cat)} &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
+          <div class="file-meta">${renderFileCategorySelect(f.name, cat)} &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
         </div></div><div class="file-actions">
           <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
         </div></div>`
