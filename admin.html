@@ -390,15 +390,16 @@
 
     // Upload multiple zips batch
     async function uploadMultipleZips(zipFiles) {
+      const cat = selectedCategory;
       uploadArea.style.display = 'none';
       uploadProgress.style.display = 'block';
       let count = 0;
       for (let i = 0; i < zipFiles.length; i++) {
         uploadProgressText.textContent = `Uploading ${i+1}/${zipFiles.length}: ${zipFiles[i].name}`;
         const name = await uploadFileSingle(zipFiles[i]);
-        if (name) { fileCategories[name] = selectedCategory; count++; }
+        if (name) { fileCategories[name] = cat; count++; }
       }
-      if (count > 0) { await saveSettings(); await loadConfig(); loadFiles(); showToast(`Uploaded ${count} file(s)`); }
+      if (count > 0) { await saveSettings(); loadFiles(); showToast(`Uploaded ${count} file(s)`); }
       else showToast('No files uploaded', 'error');
       uploadArea.style.display = 'block';
       uploadProgress.style.display = 'none';
@@ -406,6 +407,7 @@
 
     // Auto-zip non-zip files then upload
     async function autoZipAndUpload(files, zipName) {
+      const cat = selectedCategory;
       uploadArea.style.display = 'none';
       uploadProgress.style.display = 'block';
       uploadProgressText.textContent = 'Zipping files...';
@@ -417,9 +419,8 @@
         uploadProgressText.textContent = 'Uploading...';
         const name = await uploadFileSingle(zipFile);
         if (name) {
-          fileCategories[name] = selectedCategory;
+          fileCategories[name] = cat;
           await saveSettings();
-          await loadConfig();
           loadFiles();
           showToast(`Uploaded: ${name} (${files.length} files zipped)`);
         } else showToast('Upload failed', 'error');
