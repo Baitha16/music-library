@@ -110,6 +110,7 @@
           tutorialContent.textContent = config.tutorial.content || '';
         }
         renderTabs();
+        renderFiles();
       } catch (err) {
         console.error('Failed to load config');
       }

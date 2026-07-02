@@ -66,6 +66,10 @@
           <p>Drop a ZIP file above to get started.</p>
         </div>
         <div class="file-grid" id="file-grid"></div>
+        <div id="save-cat-bar" style="display:none;position:sticky;bottom:0;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-top:12px;display:none;align-items:center;justify-content:space-between">
+          <span style="font-size:14px;color:var(--text)">🔄 Category changes pending</span>
+          <button id="save-cat-btn" class="btn btn-primary btn-sm">Save Changes</button>
+        </div>
       </div>
     </div>
   </div>
@@ -104,6 +108,7 @@
     let files = [];
     let isAdmin = false;
     let selectedCategory = 'West';
+    let pendingCatChanges = false;
 
     const loginOverlay = document.getElementById('login-overlay');
     const passwordInput = document.getElementById('password-input');
@@ -131,6 +136,8 @@
     const tutorialTitleInput = document.getElementById('tutorial-title-input');
     const tutorialContentInput = document.getElementById('tutorial-content-input');
     const saveSettingsBtn = document.getElementById('save-settings-btn');
+    const saveCatBar = document.getElementById('save-cat-bar');
+    const saveCatBtn = document.getElementById('save-cat-btn');
 
     // Theme
     function initTheme() {
@@ -290,7 +297,14 @@
     function changeFileCategory(fileIdx, newCat) {
       const f = files[fileIdx]; if (!f) return;
       fileCategories[f.name] = newCat;
+      pendingCatChanges = true;
+      saveCatBar.style.display = 'flex';
       renderFiles();
+    }
+
+    function hideSaveBar() {
+      pendingCatChanges = false;
+      saveCatBar.style.display = 'none';
     }
 
     async function saveSettings() {
@@ -305,11 +319,12 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(configData)
         });
-        if (res.ok) showToast('Settings saved');
+        if (res.ok) { hideSaveBar(); showToast('Settings saved'); }
         else { const e = await res.json(); showToast(e.error || 'Save failed', 'error'); }
       } catch (err) { showToast('Save failed', 'error'); }
     }
     saveSettingsBtn.addEventListener('click', saveSettings);
+    saveCatBtn.addEventListener('click', saveSettings);
 
     async function loadFiles() {
       try {
