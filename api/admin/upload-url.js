@@ -13,8 +13,13 @@ module.exports = async (req, res) => {
   }
 
   const { filename } = req.body || {}
-  if (!filename || !filename.endsWith('.zip')) {
-    return res.status(400).json({ error: 'Invalid filename. Must be .zip' })
+  if (!filename) {
+    return res.status(400).json({ error: 'Missing filename' })
+  }
+
+  const allowedExt = /\.(zip|mid|midi|txt)$/i
+  if (!allowedExt.test(filename)) {
+    return res.status(400).json({ error: 'Invalid filename. Must be .zip, .mid, .midi, or .txt' })
   }
 
   // Sanitize filename

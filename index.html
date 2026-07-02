@@ -81,7 +81,13 @@
     const tutorialClose = document.getElementById('tutorial-close');
 
     function cleanName(name) {
-      return name.replace(/\.zip$/i, '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+      return name.replace(/\.(zip|mid|midi|txt)$/i, '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function fileIcon(name) {
+      if (name.match(/\.(mid|midi)$/i)) return '🎹';
+      if (name.match(/\.txt$/i)) return '📄';
+      return '📦';
     }
 
     function formatSize(bytes) {
@@ -176,7 +182,7 @@
         return `
           <div class="file-card">
             <div class="file-info">
-              <div class="file-icon">📦</div>
+              <div class="file-icon">${fileIcon(f.name)}</div>
               <div>
                 <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
                 <div class="file-meta">
@@ -186,7 +192,7 @@
               </div>
             </div>
             <div class="file-actions">
-              <a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-primary btn-sm">Download</a>
+              <a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-primary btn-sm">${f.name.match(/\.(mid|midi)$/i) ? '🎹 Play' : '⬇ Download'}</a>
             </div>
           </div>
         `

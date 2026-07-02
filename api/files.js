@@ -13,7 +13,7 @@ module.exports = async (req, res) => {
     if (error) throw error
 
     const files = (data || [])
-      .filter(f => f.name.endsWith('.zip'))
+      .filter(f => f.name.endsWith('.zip') || f.name.endsWith('.mid') || f.name.endsWith('.midi') || f.name.endsWith('.txt'))
       .map(f => ({
         name: f.name,
         size: f.metadata?.size || 0,
