@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - Music Library</title>
   <link rel="stylesheet" href="/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -22,9 +23,9 @@
     <div id="admin-content" style="display:none">
       <div class="upload-area" id="upload-area">
         <div class="upload-icon">📂</div>
-        <h3>Upload ZIP file</h3>
-        <p>Click or drag & drop a .zip file here (max 200MB)</p>
-        <input type="file" id="file-input" accept=".zip">
+        <h3>Upload Files</h3>
+        <p>Drop .zip file here langsung, atau drop .mid / .txt untuk auto-zip</p>
+        <input type="file" id="file-input" accept=".zip,.mid,.midi,.txt" multiple>
         <div class="upload-category">
           <label>Category:</label>
           <select id="upload-category-select"></select>
@@ -68,6 +69,19 @@
     </div>
   </div>
 
+  <div class="overlay" id="zipname-overlay">
+    <div class="modal">
+      <h2>Name your ZIP</h2>
+      <p style="color:#888;font-size:13px;margin-bottom:12px">Files will be zipped automatically</p>
+      <input type="text" id="zipname-input" placeholder="e.g. Feast - Nina.zip" style="width:100%;padding:12px 16px;background:#0e0e15;border:1px solid #2a2a3a;border-radius:8px;color:#fff;font-size:14px;outline:none;margin-bottom:16px">
+      <div class="error" id="zipname-error" style="color:#e74c3c;font-size:13px;margin-bottom:12px;display:none">Please enter a name</div>
+      <div class="modal-actions">
+        <button class="btn btn-outline btn-sm" id="zipname-cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="zipname-confirm">Zip & Upload</button>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay" id="login-overlay">
     <div class="modal">
       <h2>Admin Login</h2>
@@ -100,6 +114,12 @@
     const uploadArea = document.getElementById('upload-area');
     const uploadProgress = document.getElementById('upload-progress');
     const fileInput = document.getElementById('file-input');
+    const zipnameOverlay = document.getElementById('zipname-overlay');
+    const zipnameInput = document.getElementById('zipname-input');
+    const zipnameError = document.getElementById('zipname-error');
+    const zipnameConfirm = document.getElementById('zipname-confirm');
+    const zipnameCancel = document.getElementById('zipname-cancel');
+    let pendingFiles = [];
     const uploadCatSelect = document.getElementById('upload-category-select');
     const categoryList = document.getElementById('category-list');
     const newCatInput = document.getElementById('new-category-input');
@@ -385,6 +405,97 @@
       uploadProgress.style.display = 'none';
     }
 
+    async function autoZipAndUpload(files, zipName) {
+      uploadArea.style.display = 'none';
+      uploadProgress.style.display = 'block';
+
+      try {
+        const zip = new JSZip();
+        for (const f of files) {
+          zip.file(f.name, f);
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const zipFile = new File([blob], zipName, { type: 'application/zip' });
+
+        const urlRes = await fetch('/api/admin/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: zipFile.name })
+        });
+
+        if (!urlRes.ok) {
+          const err = await urlRes.json();
+          showToast(err.error || 'Failed to get upload URL', 'error');
+          uploadArea.style.display = 'block';
+          uploadProgress.style.display = 'none';
+          return;
+        }
+
+        const { signedUrl } = await urlRes.json();
+
+        const uploadRes = await fetch(signedUrl, {
+          method: 'PUT',
+          body: zipFile,
+          headers: { 'Content-Type': 'application/zip' }
+        });
+
+        if (uploadRes.ok) {
+          const cat = uploadCatSelect.value;
+          fileCategories[zipFile.name] = cat;
+          await saveSettings();
+          showToast(`Uploaded: ${zipFile.name} (${files.length} files zipped)`);
+          loadFiles();
+        } else {
+          showToast('Upload failed', 'error');
+        }
+      } catch (err) {
+        showToast('Zip or upload failed', 'error');
+      }
+
+      uploadArea.style.display = 'block';
+      uploadProgress.style.display = 'none';
+    }
+
+    function handleSelectedFiles(selectedFiles) {
+      const arr = Array.from(selectedFiles);
+
+      if (arr.length === 1 && arr[0].name.endsWith('.zip')) {
+        uploadFile(arr[0]);
+        return;
+      }
+
+      if (arr.length === 0) return;
+
+      pendingFiles = arr;
+      const baseName = arr[0].name.replace(/\.[^/.]+$/, '');
+      zipnameInput.value = baseName + '.zip';
+      zipnameError.style.display = 'none';
+      zipnameOverlay.classList.add('active');
+      zipnameInput.focus();
+      zipnameInput.select();
+    }
+
+    zipnameConfirm.addEventListener('click', () => {
+      const name = zipnameInput.value.trim();
+      if (!name) {
+        zipnameError.style.display = 'block';
+        return;
+      }
+      let finalName = name;
+      if (!finalName.endsWith('.zip')) finalName += '.zip';
+      zipnameOverlay.classList.remove('active');
+      autoZipAndUpload(pendingFiles, finalName);
+    });
+
+    zipnameCancel.addEventListener('click', () => {
+      zipnameOverlay.classList.remove('active');
+      pendingFiles = [];
+    });
+
+    zipnameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') zipnameConfirm.click();
+    });
+
     uploadArea.addEventListener('click', (e) => {
       if (e.target.tagName !== 'SELECT' && e.target.tagName !== 'LABEL' && !e.target.closest('.upload-category')) {
         fileInput.click();
@@ -392,7 +503,7 @@
     });
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length) {
-        uploadFile(e.target.files[0]);
+        handleSelectedFiles(e.target.files);
         e.target.value = '';
       }
     });
@@ -407,7 +518,7 @@
       e.preventDefault();
       uploadArea.classList.remove('dragover');
       if (e.dataTransfer.files.length) {
-        uploadFile(e.dataTransfer.files[0]);
+        handleSelectedFiles(e.dataTransfer.files);
       }
     });
 
