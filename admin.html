@@ -691,6 +691,7 @@
           mappings[name] = cat;
         }
         const ok = await saveNewFileCategories(mappings);
+        showToast(`DEBUG: save ${ok ? 'OK' : 'FAILED'}`, 'error');
         loadFiles();
         showToast(`Uploaded ${uploaded.length} file(s)` + (cat ? ` as "${cat}"` : ' as Unorganized') + (!ok ? ' (category save issue)' : ''));
       } else showToast('No files uploaded', 'error');
@@ -714,6 +715,7 @@
           if (cat) fileCategories[name] = cat;
           mappings[name] = cat;
           const ok = await saveNewFileCategories(mappings);
+          showToast(`DEBUG: save ${ok ? 'OK' : 'FAILED'}`, 'error');
           loadFiles();
           showToast(`Uploaded: ${name}` + (cat ? ` as "${cat}"` : ' as Unorganized') + (!ok ? ' (category save issue)' : ''));
         } else showToast('Upload failed', 'error');
