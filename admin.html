@@ -14,7 +14,7 @@
         <h1>♫ <span>Music</span> Library</h1>
         <div class="subtitle">Admin Panel</div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
+      <div class="header-actions">
         <button id="theme-toggle" class="btn-icon" title="Toggle theme">🌙</button>
         <a href="/" class="btn btn-outline btn-sm">Library</a>
         <button id="logout-btn" class="btn btn-outline btn-sm" style="display:none">Logout</button>
@@ -29,7 +29,13 @@
         <input type="file" id="file-input" accept=".zip,.mid,.midi,.txt" multiple>
         <div class="upload-category">
           <label>Category:</label>
-          <select id="upload-category-select"></select>
+          <div class="c-dropdown" id="upload-cat-dropdown">
+            <button class="c-dropdown-btn" type="button">
+              <span class="c-dropdown-label">Unorganized</span>
+              <span class="c-dropdown-arrow">▾</span>
+            </button>
+            <div class="c-dropdown-menu"></div>
+          </div>
         </div>
       </div>
 
@@ -67,9 +73,17 @@
         </select>
       </div>
 
-      <div id="bulk-bar" style="display:none;align-items:center;gap:10px;padding:12px 16px;background:var(--bg-card);border:1px solid #6c5ce7;border-radius:10px;margin-bottom:12px;">
+      <div class="tabs" id="admin-category-tabs"></div>
+
+      <div id="bulk-bar" style="display:none;align-items:center;gap:10px;padding:12px 16px;background:var(--bg-card);border:1px solid #6c5ce7;border-radius:10px;margin-bottom:12px;flex-wrap:wrap">
         <span id="bulk-count" style="font-size:14px;color:var(--text)">0 selected</span>
-        <select id="bulk-cat-select" style="padding:6px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;cursor:pointer;flex:1"></select>
+        <div class="c-dropdown" id="bulk-cat-dropdown" style="flex:1;min-width:120px">
+          <button class="c-dropdown-btn" type="button">
+            <span class="c-dropdown-label">West</span>
+            <span class="c-dropdown-arrow">▾</span>
+          </button>
+          <div class="c-dropdown-menu"></div>
+        </div>
         <button id="bulk-cat-btn" class="btn btn-primary btn-sm">Change Category</button>
         <button id="bulk-delete-btn" class="btn btn-danger btn-sm">Delete Selected</button>
         <button id="bulk-clear-btn" class="btn btn-outline btn-sm" style="border-color:var(--text-muted);color:var(--text-muted)">✕</button>
@@ -129,10 +143,11 @@
     let files = [];
     let isAdmin = false;
     let pendingCatChanges = false;
-    let pendingCategory = 'West';
+    let pendingCategory = '';
     let searchQuery = '';
     let sortMode = 'date';
     let selectedFiles = new Set();
+    let adminCatFilter = 'All';
     const searchInput = document.getElementById('search-input');
     searchInput.addEventListener('input', () => {
       searchQuery = searchInput.value.trim().toLowerCase();
@@ -163,7 +178,8 @@
     const zipnameCancel = document.getElementById('zipname-cancel');
     const themeToggle = document.getElementById('theme-toggle');
     let pendingFiles = [];
-    const uploadCatSelect = document.getElementById('upload-category-select');
+    const uploadCatDropdown = document.getElementById('upload-cat-dropdown');
+    const bulkCatDropdown = document.getElementById('bulk-cat-dropdown');
     const categoryList = document.getElementById('category-list');
     const newCatInput = document.getElementById('new-category-input');
     const addCatBtn = document.getElementById('add-category-btn');
@@ -173,7 +189,6 @@
     const saveCatBar = document.getElementById('save-cat-bar');
     const saveCatBtn = document.getElementById('save-cat-btn');
 
-    // Theme
     function initTheme() {
       const isLight = localStorage.getItem('theme') === 'light';
       document.body.classList.toggle('light-mode', isLight);
@@ -216,6 +231,94 @@
       setTimeout(() => t.classList.remove('show'), 3000);
     }
 
+    // ============= CUSTOM DROPDOWN =============
+    function setupDropdown(container, options, selectedValue, onChange) {
+      const btn = container.querySelector('.c-dropdown-btn');
+      const menu = container.querySelector('.c-dropdown-menu');
+      const label = container.querySelector('.c-dropdown-label');
+
+      function render() {
+        menu.innerHTML = options.map(o =>
+          `<div class="c-dropdown-item ${o.value === selectedValue ? 'selected' : ''}" data-value="${o.value}">${o.label}</div>`
+        ).join('');
+        label.textContent = options.find(o => o.value === selectedValue)?.label || options[0]?.label || '';
+      }
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.toggle('open');
+      });
+
+      menu.addEventListener('click', (e) => {
+        const item = e.target.closest('.c-dropdown-item');
+        if (!item) return;
+        selectedValue = item.dataset.value;
+        render();
+        menu.classList.remove('open');
+        if (onChange) onChange(selectedValue);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) menu.classList.remove('open');
+      });
+
+      render();
+      return { getValue: () => selectedValue, setValue: (v) => { selectedValue = v; render(); }, render };
+    }
+
+    let uploadCatDropdownApi = null;
+    let bulkCatDropdownApi = null;
+
+    function getDropdownOptions() {
+      return [{ value: '', label: 'Unorganized' }, ...categories.map(c => ({ value: c, label: c }))];
+    }
+
+    function renderUploadDropdown() {
+      const opts = getDropdownOptions();
+      const val = uploadCatDropdownApi ? uploadCatDropdownApi.getValue() : '';
+      uploadCatDropdown.innerHTML = `
+        <button class="c-dropdown-btn" type="button">
+          <span class="c-dropdown-label"></span>
+          <span class="c-dropdown-arrow">▾</span>
+        </button>
+        <div class="c-dropdown-menu"></div>`;
+      uploadCatDropdownApi = setupDropdown(uploadCatDropdown, opts, val || '', (v) => {});
+    }
+
+    function renderBulkDropdown() {
+      const opts = categories.map(c => ({ value: c, label: c }));
+      const val = bulkCatDropdownApi ? bulkCatDropdownApi.getValue() : (categories[0] || '');
+      bulkCatDropdown.innerHTML = `
+        <button class="c-dropdown-btn" type="button">
+          <span class="c-dropdown-label"></span>
+          <span class="c-dropdown-arrow">▾</span>
+        </button>
+        <div class="c-dropdown-menu"></div>`;
+      bulkCatDropdownApi = setupDropdown(bulkCatDropdown, opts, val, (v) => {});
+    }
+
+    function createFileCardDropdown(filename, currentCat, onChange) {
+      const div = document.createElement('div');
+      div.className = 'c-dropdown c-dropdown-sm';
+      div.innerHTML = `
+        <button class="c-dropdown-btn" type="button">
+          <span class="c-dropdown-label"></span>
+          <span class="c-dropdown-arrow">▾</span>
+        </button>
+        <div class="c-dropdown-menu"></div>`;
+      const opts = getDropdownOptions();
+      setupDropdown(div, opts, currentCat || '', (val) => {
+        if (val) fileCategories[filename] = val;
+        else delete fileCategories[filename];
+        pendingCatChanges = true;
+        saveCatBar.style.display = 'flex';
+        renderFiles();
+      });
+      return div;
+    }
+
+    // ===============================
+
     async function checkAuth() {
       try {
         const res = await fetch('/api/admin/check');
@@ -225,6 +328,8 @@
           loginOverlay.classList.remove('active');
           adminContent.style.display = 'block';
           logoutBtn.style.display = 'inline-flex';
+          renderUploadDropdown();
+          renderBulkDropdown();
           await loadConfig();
           await loadFiles();
         } else {
@@ -278,7 +383,9 @@
         tutorialTitleInput.value = cfg.tutorial?.title || '';
         tutorialContentInput.value = cfg.tutorial?.content || '';
         renderCategoryList();
-        renderUploadCategorySelect();
+        renderUploadDropdown();
+        renderBulkDropdown();
+        renderAdminTabs();
       } catch (err) {
         showToast('Failed to load settings', 'error');
       }
@@ -292,17 +399,6 @@
       `).join('');
     }
 
-    function renderUploadCategorySelect() {
-      uploadCatSelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
-      renderBulkCatSelect();
-    }
-
-    function renderFileCategorySelect(filename, currentCat) {
-      return `<select onchange="changeFileCategory('${filename.replace(/'/g, "\\'")}', this.value)" class="cat-select">
-        ${categories.map(c => `<option value="${c}" ${c === currentCat ? 'selected' : ''}>${c}</option>`).join('')}
-      </select>`;
-    }
-
     function removeCategory(index) {
       const cat = categories[index];
       categories.splice(index, 1);
@@ -310,7 +406,9 @@
         if (fileCategories[f] === cat) delete fileCategories[f];
       });
       renderCategoryList();
-      renderUploadCategorySelect();
+      renderUploadDropdown();
+      renderBulkDropdown();
+      renderAdminTabs();
       renderFiles();
     }
 
@@ -321,17 +419,12 @@
       categories.push(name);
       newCatInput.value = '';
       renderCategoryList();
-      renderUploadCategorySelect();
+      renderUploadDropdown();
+      renderBulkDropdown();
+      renderAdminTabs();
       renderFiles();
       showToast(`Added category: ${name}`);
     });
-
-    function changeFileCategory(filename, newCat) {
-      fileCategories[filename] = newCat;
-      pendingCatChanges = true;
-      saveCatBar.style.display = 'flex';
-      renderFiles();
-    }
 
     function hideSaveBar() {
       pendingCatChanges = false;
@@ -372,8 +465,31 @@
       } catch (err) { showToast('Failed to load files', 'error'); }
     }
 
+    function renderAdminTabs() {
+      const tabsEl = document.getElementById('admin-category-tabs');
+      const allTabs = ['All', 'Unorganized', ...categories];
+      tabsEl.innerHTML = allTabs.map(c =>
+        `<button class="tab ${c === adminCatFilter ? 'active' : ''}" data-cat="${c}" onclick="filterAdminCat('${c}')">${c}</button>`
+      ).join('');
+    }
+
+    function filterAdminCat(cat) {
+      adminCatFilter = cat;
+      document.querySelectorAll('#admin-category-tabs .tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`#admin-category-tabs .tab[data-cat="${cat}"]`)?.classList.add('active');
+      renderFiles();
+    }
+
     function renderFiles() {
-      const filtered = searchQuery ? files.filter(f => cleanName(f.name).toLowerCase().includes(searchQuery)) : files;
+      let filtered = files;
+      if (adminCatFilter === 'Unorganized') {
+        filtered = files.filter(f => !fileCategories[f.name]);
+      } else if (adminCatFilter !== 'All') {
+        filtered = files.filter(f => fileCategories[f.name] === adminCatFilter);
+      }
+      if (searchQuery) {
+        filtered = filtered.filter(f => cleanName(f.name).toLowerCase().includes(searchQuery));
+      }
       if (!filtered.length && !files.length) { emptyState.style.display = 'block'; fileGrid.innerHTML = ''; return; }
       if (!filtered.length) { emptyState.style.display = 'block'; emptyState.innerHTML = '<div class="icon">🔍</div><h3>No results</h3><p>Try a different search query.</p>'; fileGrid.innerHTML = ''; return; }
       emptyState.style.display = 'none';
@@ -382,11 +498,24 @@
         const checked = selectedFiles.has(f.name) ? 'checked' : '';
         return `<div class="file-card"><input type="checkbox" class="file-checkbox" data-filename="${f.name.replace(/"/g, '&quot;')}" ${checked} onchange="toggleSelect('${f.name.replace(/'/g, "\\'")}')"><div class="file-info"><div class="file-icon">${fileIcon(f.name)}</div><div>
           <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
-          <div class="file-meta">${renderFileCategorySelect(f.name, cat)} &nbsp; ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
+          <div class="file-meta"><span class="cat-badge">${cat || 'Unorganized'}</span> ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
         </div></div><div class="file-actions">
           <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
         </div></div>`
       }).join('');
+      // Attach dropdown to each file card
+      filtered.forEach(f => {
+        const idx = filtered.indexOf(f);
+        if (idx === -1) return;
+        const card = fileGrid.children[idx];
+        if (!card) return;
+        const meta = card.querySelector('.file-meta');
+        if (!meta) return;
+        const badge = meta.querySelector('.cat-badge');
+        if (!badge) return;
+        const dropdown = createFileCardDropdown(f.name, fileCategories[f.name] || '', (val) => {});
+        badge.replaceWith(dropdown);
+      });
       updateBulkBar();
     }
 
@@ -424,10 +553,11 @@
     }
 
     function getFilteredFiles() {
-      const q = searchQuery;
-      const list = files;
-      if (!q) return list;
-      return list.filter(f => cleanName(f.name).toLowerCase().includes(q));
+      let list = files;
+      if (adminCatFilter === 'Unorganized') list = list.filter(f => !fileCategories[f.name]);
+      else if (adminCatFilter !== 'All') list = list.filter(f => fileCategories[f.name] === adminCatFilter);
+      if (searchQuery) list = list.filter(f => cleanName(f.name).toLowerCase().includes(searchQuery));
+      return list;
     }
 
     function updateBulkBar() {
@@ -441,15 +571,9 @@
       }
       bar.style.display = 'flex';
       count.textContent = `${selectedFiles.size} selected`;
-      // update select-all checkbox
       const filtered = getFilteredFiles();
       const allSelected = filtered.length > 0 && filtered.every(f => selectedFiles.has(f.name));
       if (sel) sel.checked = allSelected;
-    }
-
-    function renderBulkCatSelect() {
-      const sel = document.getElementById('bulk-cat-select');
-      sel.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
     }
 
     async function bulkDeleteSelected() {
@@ -466,7 +590,6 @@
       }
       selectedFiles.clear();
       updateBulkBar();
-      // Tunggu sebentar biar Supabase settle
       await new Promise(r => setTimeout(r, 1000));
       loadFiles();
       showToast(`Deleted ${ok} file(s)` + (fail ? `, ${fail} failed` : ''));
@@ -475,7 +598,8 @@
     async function bulkChangeCategory() {
       const list = Array.from(selectedFiles);
       if (!list.length) return;
-      const cat = document.getElementById('bulk-cat-select').value;
+      const cat = bulkCatDropdownApi ? bulkCatDropdownApi.getValue() : categories[0];
+      if (!cat) { showToast('Select a category', 'error'); return; }
       for (const name of list) fileCategories[name] = cat;
       selectedFiles.clear();
       updateBulkBar();
@@ -484,7 +608,6 @@
       showToast(`Changed ${list.length} file(s) to "${cat}"`);
     }
 
-    // Wire up bulk bar
     document.getElementById('bulk-delete-btn').addEventListener('click', bulkDeleteSelected);
     document.getElementById('bulk-cat-btn').addEventListener('click', bulkChangeCategory);
     document.getElementById('bulk-clear-btn').addEventListener('click', () => {
@@ -495,7 +618,6 @@
     document.getElementById('select-all-cb').addEventListener('change', toggleSelectAll);
     // =======================================================
 
-    // Core upload helper (single file, returns filename on success or null)
     async function uploadFileSingle(file) {
       const ext = file.name.split('.').pop().toLowerCase();
       if (!['zip', 'mid', 'midi', 'txt'].includes(ext)) { showToast('Only .zip, .mid, .midi, .txt allowed', 'error'); return null; }
@@ -513,13 +635,15 @@
       } catch { return null; }
     }
 
-    // Save file-category mapping by reading current config from server, adding, then saving
-    async function saveFileCategory(filename, category) {
+    // Batch-save file categories: read config ONCE, add all mappings, save ONCE
+    async function saveNewFileCategories(mappings) {
       try {
         const res = await fetch('/api/admin/config');
         const cfg = await res.json();
         cfg.fileCategories = cfg.fileCategories || {};
-        cfg.fileCategories[filename] = category;
+        for (const [name, cat] of Object.entries(mappings)) {
+          if (cat) cfg.fileCategories[name] = cat;
+        }
         const saveRes = await fetch('/api/admin/config', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cfg)
@@ -528,7 +652,6 @@
       } catch { return false; }
     }
 
-    // Upload multiple zips batch
     async function uploadMultipleZips(zipFiles, cat) {
       uploadArea.style.display = 'none';
       uploadProgress.style.display = 'block';
@@ -539,18 +662,19 @@
         if (name) uploaded.push(name);
       }
       if (uploaded.length > 0) {
+        const mappings = {};
         for (const name of uploaded) {
-          fileCategories[name] = cat;
-          await saveFileCategory(name, cat);
+          if (cat) fileCategories[name] = cat;
+          mappings[name] = cat;
         }
+        const ok = await saveNewFileCategories(mappings);
         loadFiles();
-        showToast(`Uploaded ${uploaded.length} file(s) as "${cat}"`);
+        showToast(`Uploaded ${uploaded.length} file(s)` + (cat ? ` as "${cat}"` : ' as Unorganized') + (!ok ? ' (category save issue)' : ''));
       } else showToast('No files uploaded', 'error');
       uploadArea.style.display = 'block';
       uploadProgress.style.display = 'none';
     }
 
-    // Auto-zip non-zip files then upload
     async function autoZipAndUpload(files, zipName, cat) {
       uploadArea.style.display = 'none';
       uploadProgress.style.display = 'block';
@@ -563,10 +687,12 @@
         uploadProgressText.textContent = 'Uploading...';
         const name = await uploadFileSingle(zipFile);
         if (name) {
-          fileCategories[name] = cat;
-          const ok = await saveFileCategory(name, cat);
+          const mappings = {};
+          if (cat) fileCategories[name] = cat;
+          mappings[name] = cat;
+          const ok = await saveNewFileCategories(mappings);
           loadFiles();
-          showToast(ok ? `Uploaded: ${name} as "${cat}"` : 'Category save issue', ok ? 'success' : 'error');
+          showToast(`Uploaded: ${name}` + (cat ? ` as "${cat}"` : ' as Unorganized') + (!ok ? ' (category save issue)' : ''));
         } else showToast('Upload failed', 'error');
       } catch { showToast('Zip or upload failed', 'error'); }
       uploadArea.style.display = 'block';
@@ -574,7 +700,7 @@
     }
 
     function getUploadCategory() {
-      return uploadCatSelect.options[uploadCatSelect.selectedIndex]?.value || categories[0] || 'West';
+      return uploadCatDropdownApi ? uploadCatDropdownApi.getValue() : '';
     }
 
     function handleSelectedFiles(selectedFiles) {
@@ -608,7 +734,7 @@
     zipnameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') zipnameConfirm.click(); });
 
     uploadArea.addEventListener('click', (e) => {
-      if (e.target.tagName !== 'SELECT' && e.target.tagName !== 'LABEL' && !e.target.closest('.upload-category'))
+      if (e.target.tagName !== 'BUTTON' && !e.target.closest('.c-dropdown'))
         fileInput.click();
     });
     fileInput.addEventListener('change', (e) => {

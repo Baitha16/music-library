@@ -112,7 +112,7 @@
       try {
         const res = await fetch('/api/config');
         const config = await res.json();
-        categories = ['All', ...(config.categories || [])];
+        categories = ['All', 'Unorganized', ...(config.categories || [])];
         fileCategories = config.fileCategories || {};
         if (config.tutorial) {
           tutorialTitle.textContent = config.tutorial.title || 'Tutorial';
@@ -127,7 +127,7 @@
 
     function renderTabs() {
       tabs.innerHTML = categories.map(c => `
-        <button class="tab ${c === 'All' ? 'active' : ''}" data-category="${c}" onclick="filterCategory('${c}')">${c}</button>
+        <button class="tab ${c === currentCategory ? 'active' : ''}" data-category="${c}" onclick="filterCategory('${c}')">${c}</button>
       `).join('');
     }
 
@@ -163,7 +163,9 @@
     function renderFiles() {
       const files = window.allFiles || [];
       let filtered = files;
-      if (currentCategory !== 'All') {
+      if (currentCategory === 'Unorganized') {
+        filtered = files.filter(f => !getCategory(f.name));
+      } else if (currentCategory !== 'All') {
         filtered = files.filter(f => getCategory(f.name) === currentCategory);
       }
       if (searchQuery) {
@@ -178,7 +180,6 @@
 
       emptyState.style.display = 'none';
 
-      // Group by base name
       const groups = {};
       filtered.forEach(f => {
         const base = cleanName(f.name);
@@ -188,7 +189,7 @@
 
       fileGrid.innerHTML = Object.entries(groups).map(([baseName, fGroup]) => {
         const cat = getCategory(fGroup[0].name);
-        const catBadge = cat ? `<span class="cat-badge">${cat}</span>` : '';
+        const catBadge = cat ? `<span class="cat-badge">${cat}</span>` : `<span class="cat-badge cat-badge-unorg">Unorganized</span>`;
         const midFile = fGroup.find(f => f.name.match(/\.(mid|midi)$/i));
         const txtFile = fGroup.find(f => f.name.match(/\.txt$/i));
         const zipFile = fGroup.find(f => f.name.match(/\.zip$/i));
@@ -206,7 +207,6 @@
         } else if (zipFile) {
           actionsHtml = `<a href="/api/download?name=${encodeURIComponent(zipFile.name)}" class="btn btn-primary btn-sm">⬇ Download</a>`;
         } else {
-          // Multiple files without mid/txt/zip — show individual download buttons
           actionsHtml = fGroup.map(f =>
             `<a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-outline btn-sm">⬇ ${f.name.split('.').pop()}</a>`
           ).join('');
@@ -253,7 +253,6 @@
       }
     }
 
-    // Tutorial
     tutorialBtn.addEventListener('click', () => tutorialOverlay.classList.add('active'));
     tutorialClose.addEventListener('click', () => tutorialOverlay.classList.remove('active'));
     tutorialOverlay.addEventListener('click', (e) => {
