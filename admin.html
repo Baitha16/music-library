@@ -96,7 +96,8 @@
           <p>Drop a ZIP file above to get started.</p>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px" id="select-all-bar">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer">
+          <button id="select-toggle-btn" class="btn btn-outline btn-sm">Select</button>
+          <label id="select-all-label" style="display:none;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer">
             <input type="checkbox" id="select-all-cb"> Select All
           </label>
         </div>
@@ -147,6 +148,7 @@
     let searchQuery = '';
     let sortMode = 'date';
     let selectedFiles = new Set();
+    let selectMode = false;
     let adminCatFilter = 'All';
     const searchInput = document.getElementById('search-input');
     searchInput.addEventListener('input', () => {
@@ -496,7 +498,8 @@
       fileGrid.innerHTML = filtered.map(f => {
         const cat = fileCategories[f.name] || '';
         const checked = selectedFiles.has(f.name) ? 'checked' : '';
-        return `<div class="file-card"><input type="checkbox" class="file-checkbox" data-filename="${f.name.replace(/"/g, '&quot;')}" ${checked} onchange="toggleSelect('${f.name.replace(/'/g, "\\'")}')"><div class="file-info"><div class="file-icon">${fileIcon(f.name)}</div><div>
+        const cbHtml = selectMode ? `<input type="checkbox" class="file-checkbox" data-filename="${f.name.replace(/"/g, '&quot;')}" ${checked} onchange="toggleSelect('${f.name.replace(/'/g, "\\'")}')">` : '';
+        return `<div class="file-card">${cbHtml}<div class="file-info"><div class="file-icon">${fileIcon(f.name)}</div><div>
           <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
           <div class="file-meta"><span class="cat-badge">${cat || 'Unorganized'}</span> ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
         </div></div><div class="file-actions">
@@ -533,7 +536,25 @@
     }
 
     // ============= MULTI-SELECT & BULK ACTIONS =============
+    function toggleSelectMode() {
+      selectMode = !selectMode;
+      if (!selectMode) {
+        selectedFiles.clear();
+        updateBulkBar();
+      }
+      const btn = document.getElementById('select-toggle-btn');
+      const label = document.getElementById('select-all-label');
+      btn.textContent = selectMode ? 'Cancel' : 'Select';
+      label.style.display = selectMode ? 'inline-flex' : 'none';
+      if (selectMode) {
+        const cb = document.getElementById('select-all-cb');
+        if (cb) cb.checked = false;
+      }
+      renderFiles();
+    }
+
     function toggleSelect(filename) {
+      if (!selectMode) return;
       if (selectedFiles.has(filename)) selectedFiles.delete(filename);
       else selectedFiles.add(filename);
       updateBulkBar();
@@ -564,7 +585,7 @@
       const bar = document.getElementById('bulk-bar');
       const count = document.getElementById('bulk-count');
       const sel = document.getElementById('select-all-cb');
-      if (selectedFiles.size === 0) {
+      if (!selectMode || selectedFiles.size === 0) {
         bar.style.display = 'none';
         if (sel) sel.checked = false;
         return;
@@ -615,6 +636,7 @@
       updateBulkBar();
       renderFiles();
     });
+    document.getElementById('select-toggle-btn').addEventListener('click', toggleSelectMode);
     document.getElementById('select-all-cb').addEventListener('change', toggleSelectAll);
     // =======================================================
 
@@ -641,6 +663,10 @@
         const res = await fetch('/api/admin/config');
         const cfg = await res.json();
         cfg.fileCategories = cfg.fileCategories || {};
+        cfg.categories = cfg.categories || ['West', 'Indo', 'Phonk', 'Anime & Japan'];
+        if (!cfg.tutorial) cfg.tutorial = { title: 'Tutorial', content: '' };
+        if (!cfg.tutorial.title) cfg.tutorial.title = 'Tutorial';
+        if (!cfg.tutorial.content) cfg.tutorial.content = '';
         for (const [name, cat] of Object.entries(mappings)) {
           if (cat) cfg.fileCategories[name] = cat;
         }
@@ -648,8 +674,9 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cfg)
         });
+        if (!saveRes.ok) { const e = await saveRes.json(); console.warn('Save category failed:', e); }
         return saveRes.ok;
-      } catch { return false; }
+      } catch (err) { console.warn('saveNewFileCategories error:', err); return false; }
     }
 
     async function uploadMultipleZips(zipFiles, cat) {

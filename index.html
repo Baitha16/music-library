@@ -112,7 +112,7 @@
       try {
         const res = await fetch('/api/config');
         const config = await res.json();
-        categories = ['All', 'Unorganized', ...(config.categories || [])];
+        categories = ['All', ...(config.categories || [])];
         fileCategories = config.fileCategories || {};
         if (config.tutorial) {
           tutorialTitle.textContent = config.tutorial.title || 'Tutorial';
@@ -163,9 +163,7 @@
     function renderFiles() {
       const files = window.allFiles || [];
       let filtered = files;
-      if (currentCategory === 'Unorganized') {
-        filtered = files.filter(f => !getCategory(f.name));
-      } else if (currentCategory !== 'All') {
+      if (currentCategory !== 'All') {
         filtered = files.filter(f => getCategory(f.name) === currentCategory);
       }
       if (searchQuery) {
@@ -189,7 +187,7 @@
 
       fileGrid.innerHTML = Object.entries(groups).map(([baseName, fGroup]) => {
         const cat = getCategory(fGroup[0].name);
-        const catBadge = cat ? `<span class="cat-badge">${cat}</span>` : `<span class="cat-badge cat-badge-unorg">Unorganized</span>`;
+        const catBadge = cat ? `<span class="cat-badge">${cat}</span>` : '';
         const midFile = fGroup.find(f => f.name.match(/\.(mid|midi)$/i));
         const txtFile = fGroup.find(f => f.name.match(/\.txt$/i));
         const zipFile = fGroup.find(f => f.name.match(/\.zip$/i));
