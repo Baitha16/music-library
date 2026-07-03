@@ -197,7 +197,7 @@
         if (midFile && txtFile) {
           actionsHtml = `
             <a href="ezio://load?file=${encodeURIComponent(midFile.name)}&txt=${encodeURIComponent(txtFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>
-            <a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-outline btn-sm" download>📄 TXT</a>
+            <a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-outline btn-sm" download>📄 Sheets</a>
             <button class="btn btn-outline btn-sm" onclick="downloadAsZip(['${midFile.name.replace(/'/g, "\\'")}','${txtFile.name.replace(/'/g, "\\'")}'],'${baseName.replace(/'/g, "\\'")}.zip')">⬇ Download</button>`;
         } else if (midFile) {
           actionsHtml = `<a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>`;
