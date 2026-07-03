@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.storage.from('music-library').list()
+    const { data, error } = await supabase.storage.from('music-library').list('', { limit: 1000 })
 
     if (error) throw error
 
