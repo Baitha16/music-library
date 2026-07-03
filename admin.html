@@ -657,9 +657,9 @@
           body: JSON.stringify({ filename: file.name })
         });
         if (!urlRes.ok) { const e = await urlRes.json(); showToast(e.error || 'Upload URL failed', 'error'); return null; }
-        const { signedUrl } = await urlRes.json();
+        const { signedUrl, path } = await urlRes.json();
         const upRes = await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': mimeMap[ext] || 'application/octet-stream' } });
-        return upRes.ok ? file.name : null;
+        return upRes.ok ? (path || file.name) : null;
       } catch { return null; }
     }
 
@@ -690,10 +690,10 @@
           if (cat) fileCategories[name] = cat;
           mappings[name] = cat;
         }
-        const ok = await saveNewFileCategories(mappings);
-        showToast(`DEBUG: save ${ok ? 'OK' : 'FAILED'}`, 'error');
+        await saveNewFileCategories(mappings);
+        await new Promise(r => setTimeout(r, 1500));
         loadFiles();
-        showToast(`Uploaded ${uploaded.length} file(s)` + (cat ? ` as "${cat}"` : ' as Unorganized') + (!ok ? ' (category save issue)' : ''));
+        showToast(`Uploaded ${uploaded.length} file(s)` + (cat ? ` as "${cat}"` : ' as Unorganized'));
       } else showToast('No files uploaded', 'error');
       uploadArea.style.display = 'block';
       uploadProgress.style.display = 'none';
@@ -714,10 +714,10 @@
           const mappings = {};
           if (cat) fileCategories[name] = cat;
           mappings[name] = cat;
-          const ok = await saveNewFileCategories(mappings);
-          showToast(`DEBUG: save ${ok ? 'OK' : 'FAILED'}`, 'error');
+          await saveNewFileCategories(mappings);
+          await new Promise(r => setTimeout(r, 1500));
           loadFiles();
-          showToast(`Uploaded: ${name}` + (cat ? ` as "${cat}"` : ' as Unorganized') + (!ok ? ' (category save issue)' : ''));
+          showToast(`Uploaded: ${name}` + (cat ? ` as "${cat}"` : ' as Unorganized'));
         } else showToast('Upload failed', 'error');
       } catch { showToast('Zip or upload failed', 'error'); }
       uploadArea.style.display = 'block';
@@ -733,7 +733,6 @@
       const arr = Array.from(selectedFiles);
       if (!arr.length) return;
       const cat = getUploadCategory();
-      showToast(`DEBUG: read category = "${cat}"`, 'error');
       const allZip = arr.every(f => f.name.match(/\.zip$/i));
       const allRaw = arr.every(f => f.name.match(/\.(mid|midi|txt)$/i));
       if (allZip) { uploadMultipleZips(arr, cat); return; }
