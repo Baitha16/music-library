@@ -453,12 +453,23 @@
         content: tutorialContentInput.value
       };
       try {
-        const res = await fetch('/api/admin/config', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(configData)
-        });
-        if (res.ok) { hideSaveBar(); showToast('Settings saved'); }
-        else { const e = await res.json(); showToast(e.error || 'Save failed', 'error'); }
+        const promises = [
+          fetch('/api/admin/config', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configData)
+          })
+        ];
+        if (Object.keys(fileCategories).length > 0) {
+          promises.push(
+            fetch('/api/admin/file-categories', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(fileCategories)
+            })
+          );
+        }
+        const [configRes] = await Promise.all(promises);
+        if (configRes.ok) { hideSaveBar(); showToast('Settings saved'); }
+        else { const e = await configRes.json(); showToast(e.error || 'Save failed', 'error'); }
       } catch (err) { showToast('Save failed', 'error'); }
     }
     saveSettingsBtn.addEventListener('click', saveSettings);
