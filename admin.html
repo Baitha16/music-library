@@ -731,6 +731,7 @@
       const arr = Array.from(selectedFiles);
       if (!arr.length) return;
       const cat = getUploadCategory();
+      showToast(`DEBUG: read category = "${cat}"`, 'error');
       const allZip = arr.every(f => f.name.match(/\.zip$/i));
       const allRaw = arr.every(f => f.name.match(/\.(mid|midi|txt)$/i));
       if (allZip) { uploadMultipleZips(arr, cat); return; }
