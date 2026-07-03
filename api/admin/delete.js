@@ -18,9 +18,11 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { error } = await supabase.storage.from('music-library').remove([name])
+    const { error: storageErr } = await supabase.storage.from('music-library').remove([name])
+    if (storageErr) throw storageErr
 
-    if (error) throw error
+    // Also delete from file_categories table
+    await supabase.from('file_categories').delete().eq('filename', name)
 
     return res.status(200).json({ success: true })
   } catch (err) {

@@ -333,6 +333,7 @@
           renderUploadDropdown();
           renderBulkDropdown();
           await loadConfig();
+          await loadFileCategories();
           await loadFiles();
         } else {
           loginOverlay.classList.add('active');
@@ -381,7 +382,6 @@
         const cfg = await res.json();
         configData = cfg;
         categories = cfg.categories || ['West', 'Indo', 'Phonk', 'Anime & Japan'];
-        fileCategories = cfg.fileCategories || {};
         tutorialTitleInput.value = cfg.tutorial?.title || '';
         tutorialContentInput.value = cfg.tutorial?.content || '';
         renderCategoryList();
@@ -391,6 +391,13 @@
       } catch (err) {
         showToast('Failed to load settings', 'error');
       }
+    }
+
+    async function loadFileCategories() {
+      try {
+        const res = await fetch('/api/file-categories');
+        fileCategories = await res.json();
+      } catch { fileCategories = {}; }
     }
 
     function renderCategoryList() {
@@ -404,9 +411,14 @@
     function removeCategory(index) {
       const cat = categories[index];
       categories.splice(index, 1);
-      Object.keys(fileCategories).forEach(f => {
-        if (fileCategories[f] === cat) delete fileCategories[f];
-      });
+      const toRemove = Object.keys(fileCategories).filter(f => fileCategories[f] === cat);
+      toRemove.forEach(f => delete fileCategories[f]);
+      if (toRemove.length > 0) {
+        fetch('/api/admin/file-categories', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filenames: toRemove })
+        }).catch(() => {});
+      }
       renderCategoryList();
       renderUploadDropdown();
       renderBulkDropdown();
@@ -435,7 +447,7 @@
 
     async function saveSettings() {
       configData.categories = [...categories];
-      configData.fileCategories = { ...fileCategories };
+      delete configData.fileCategories;
       configData.tutorial = {
         title: tutorialTitleInput.value.trim() || 'Tutorial',
         content: tutorialContentInput.value
@@ -660,19 +672,9 @@
     // Batch-save file categories: read config ONCE, add all mappings, save ONCE
     async function saveNewFileCategories(mappings) {
       try {
-        const res = await fetch('/api/admin/config');
-        const cfg = await res.json();
-        cfg.fileCategories = cfg.fileCategories || {};
-        cfg.categories = cfg.categories || ['West', 'Indo', 'Phonk', 'Anime & Japan'];
-        if (!cfg.tutorial) cfg.tutorial = { title: 'Tutorial', content: '' };
-        if (!cfg.tutorial.title) cfg.tutorial.title = 'Tutorial';
-        if (!cfg.tutorial.content) cfg.tutorial.content = '';
-        for (const [name, cat] of Object.entries(mappings)) {
-          if (cat) cfg.fileCategories[name] = cat;
-        }
-        const saveRes = await fetch('/api/admin/config', {
+        const saveRes = await fetch('/api/admin/file-categories', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cfg)
+          body: JSON.stringify(mappings)
         });
         if (!saveRes.ok) { const e = await saveRes.json(); console.warn('Save category failed:', e); }
         return saveRes.ok;

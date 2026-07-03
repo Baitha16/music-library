@@ -113,7 +113,6 @@
         const res = await fetch('/api/config');
         const config = await res.json();
         categories = ['All', ...(config.categories || [])];
-        fileCategories = config.fileCategories || {};
         if (config.tutorial) {
           tutorialTitle.textContent = config.tutorial.title || 'Tutorial';
           tutorialContent.textContent = config.tutorial.content || '';
@@ -123,6 +122,14 @@
       } catch (err) {
         console.error('Failed to load config');
       }
+    }
+
+    async function loadFileCategories() {
+      try {
+        const res = await fetch('/api/file-categories');
+        fileCategories = await res.json();
+        renderFiles();
+      } catch { fileCategories = {}; }
     }
 
     function renderTabs() {
@@ -264,7 +271,7 @@
       setTimeout(() => t.classList.remove('show'), 3000);
     }
 
-    Promise.all([loadConfig(), loadFiles()]);
+    Promise.all([loadConfig(), loadFileCategories(), loadFiles()]);
   </script>
 </body>
 </html>
