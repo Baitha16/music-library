@@ -291,7 +291,7 @@
           <span class="c-dropdown-arrow">▾</span>
         </button>
         <div class="c-dropdown-menu"></div>`;
-      const opts = getDropdownOptions();
+      const opts = [{ value: '', label: 'Unorganized' }, ...categories.map(c => ({ value: c, label: c }))];
       setupDropdown(div, opts, currentCat || '', (val) => {
         if (val) fileCategories[filename] = val;
         else delete fileCategories[filename];
