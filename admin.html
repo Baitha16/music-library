@@ -29,13 +29,9 @@
         <input type="file" id="file-input" accept=".zip,.mid,.midi,.txt" multiple>
         <div class="upload-category">
           <label>Category:</label>
-          <div class="c-dropdown" id="upload-cat-dropdown">
-            <button class="c-dropdown-btn" type="button">
-              <span class="c-dropdown-label">Unorganized</span>
-              <span class="c-dropdown-arrow">▾</span>
-            </button>
-            <div class="c-dropdown-menu"></div>
-          </div>
+          <select id="upload-category-select">
+            <option value="">Unorganized</option>
+          </select>
         </div>
       </div>
 
@@ -180,7 +176,6 @@
     const zipnameCancel = document.getElementById('zipname-cancel');
     const themeToggle = document.getElementById('theme-toggle');
     let pendingFiles = [];
-    const uploadCatDropdown = document.getElementById('upload-cat-dropdown');
     const bulkCatDropdown = document.getElementById('bulk-cat-dropdown');
     const categoryList = document.getElementById('category-list');
     const newCatInput = document.getElementById('new-category-input');
@@ -268,24 +263,11 @@
       return { getValue: () => selectedValue, setValue: (v) => { selectedValue = v; render(); }, render };
     }
 
-    let uploadCatDropdownApi = null;
     let bulkCatDropdownApi = null;
-    let uploadCategoryValue = '';
 
-    function getDropdownOptions() {
-      return [{ value: '', label: 'Unorganized' }, ...categories.map(c => ({ value: c, label: c }))];
-    }
-
-    function renderUploadDropdown() {
-      const opts = getDropdownOptions();
-      const val = uploadCatDropdownApi ? uploadCatDropdownApi.getValue() : uploadCategoryValue;
-      uploadCatDropdown.innerHTML = `
-        <button class="c-dropdown-btn" type="button">
-          <span class="c-dropdown-label"></span>
-          <span class="c-dropdown-arrow">▾</span>
-        </button>
-        <div class="c-dropdown-menu"></div>`;
-      uploadCatDropdownApi = setupDropdown(uploadCatDropdown, opts, val || '', (v) => { uploadCategoryValue = v; });
+    function renderUploadCategorySelect() {
+      const sel = document.getElementById('upload-category-select');
+      sel.innerHTML = `<option value="">Unorganized</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join('');
     }
 
     function renderBulkDropdown() {
@@ -331,7 +313,7 @@
           loginOverlay.classList.remove('active');
           adminContent.style.display = 'block';
           logoutBtn.style.display = 'inline-flex';
-          renderUploadDropdown();
+          renderUploadCategorySelect();
           renderBulkDropdown();
           await loadConfig();
           await loadFileCategories();
@@ -386,7 +368,7 @@
         tutorialTitleInput.value = cfg.tutorial?.title || '';
         tutorialContentInput.value = cfg.tutorial?.content || '';
         renderCategoryList();
-        renderUploadDropdown();
+        renderUploadCategorySelect();
         renderBulkDropdown();
         renderAdminTabs();
       } catch (err) {
@@ -421,7 +403,7 @@
         }).catch(() => {});
       }
       renderCategoryList();
-      renderUploadDropdown();
+      renderUploadCategorySelect();
       renderBulkDropdown();
       renderAdminTabs();
       renderFiles();
@@ -434,7 +416,7 @@
       categories.push(name);
       newCatInput.value = '';
       renderCategoryList();
-      renderUploadDropdown();
+      renderUploadCategorySelect();
       renderBulkDropdown();
       renderAdminTabs();
       renderFiles();
@@ -741,7 +723,8 @@
     }
 
     function getUploadCategory() {
-      return uploadCategoryValue;
+      const sel = document.getElementById('upload-category-select');
+      return sel ? sel.value : '';
     }
 
     function handleSelectedFiles(selectedFiles) {
