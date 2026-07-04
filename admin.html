@@ -378,11 +378,17 @@
 
     function renderCategoryList() {
       categoryList.innerHTML = categories.map((c, i) => `
-        <div class="category-item"><span>${c}</span>
+        <div class="category-item" draggable="true" data-index="${i}" ondragstart="onCatDragStart(event)" ondragover="onCatDragOver(event)" ondrop="onCatDrop(event)" ondragend="onCatDragEnd(event)">
+          <span class="drag-handle">⠿</span><span>${c}</span>
           <button class="btn btn-danger btn-sm" onclick="removeCategory(${i})">✕</button>
         </div>
       `).join('');
     }
+    let dragCatIndex = null;
+    function onCatDragStart(e) { dragCatIndex = +e.target.closest('.category-item').dataset.index; e.target.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+    function onCatDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const t = e.target.closest('.category-item'); if (!t) return; const idx = +t.dataset.index; if (idx === dragCatIndex) return; const items = categoryList.querySelectorAll('.category-item'); items.forEach(i => i.classList.remove('drop-before', 'drop-after')); if (idx < dragCatIndex) t.classList.add('drop-before'); else t.classList.add('drop-after'); }
+    function onCatDrop(e) { e.preventDefault(); const t = e.target.closest('.category-item'); if (!t) return; const toIdx = +t.dataset.index; if (toIdx === dragCatIndex) return; const [moved] = categories.splice(dragCatIndex, 1); categories.splice(toIdx, 0, moved); renderCategoryList(); renderUploadCategorySelect(); renderBulkDropdown(); renderAdminTabs(); renderFiles(); }
+    function onCatDragEnd(e) { e.target.classList.remove('dragging'); categoryList.querySelectorAll('.category-item').forEach(i => i.classList.remove('drop-before', 'drop-after')); dragCatIndex = null; }
 
     function removeCategory(index) {
       const cat = categories[index];
