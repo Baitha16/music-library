@@ -22,8 +22,8 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Invalid filename. Must be .zip, .mid, .midi, or .txt' })
   }
 
-  // Sanitize filename — allow Unicode letters, numbers, spaces, and common symbols
-  const safeName = filename.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+  // Sanitize filename — preserve accented chars, replace spaces & dangerous chars
+  const safeName = filename.replace(/[<>:"/\\|?*\x00-\x1f\s]/g, '_')
 
   try {
     const { data, error } = await supabase.storage

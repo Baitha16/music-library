@@ -643,8 +643,9 @@
         if (!urlRes.ok) { const e = await urlRes.json(); showToast(e.error || 'Upload URL failed', 'error'); return null; }
         const { signedUrl, path } = await urlRes.json();
         const upRes = await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': mimeMap[ext] || 'application/octet-stream' } });
-        return upRes.ok ? (path || file.name) : null;
-      } catch { return null; }
+        if (!upRes.ok) { showToast(`Upload failed: ${file.name} (${upRes.status})`, 'error'); return null; }
+        return path || file.name;
+      } catch (err) { showToast(`Upload error: ${file.name}`, 'error'); return null; }
     }
 
     // Batch-save file categories: read config ONCE, add all mappings, save ONCE
