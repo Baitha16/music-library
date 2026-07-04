@@ -136,6 +136,7 @@
   <script>
     let categories = ['West', 'Indo', 'Phonk', 'Anime & Japan'];
     let fileCategories = {};
+    let displayNames = {};
     let configData = {};
     let files = [];
     let isAdmin = false;
@@ -199,6 +200,7 @@
     initTheme();
 
     function cleanName(name) {
+      if (displayNames[name]) return displayNames[name].replace(/\.(zip|mid|midi|txt)$/i, '');
       return name.replace(/\.(zip|mid|midi|txt)$/i, '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
@@ -365,6 +367,7 @@
         configData = cfg;
         categories = cfg.categories || ['West', 'Indo', 'Phonk', 'Anime & Japan'];
         fileCategories = cfg.fileCategories || {};
+        displayNames = cfg.displayNames || {};
         tutorialTitleInput.value = cfg.tutorial?.title || '';
         tutorialContentInput.value = cfg.tutorial?.content || '';
         renderCategoryList();
@@ -425,6 +428,7 @@
     async function saveSettings() {
       configData.categories = [...categories];
       configData.fileCategories = { ...fileCategories };
+      configData.displayNames = { ...displayNames };
       configData.tutorial = {
         title: tutorialTitleInput.value.trim() || 'Tutorial',
         content: tutorialContentInput.value
@@ -518,6 +522,7 @@
         const res = await fetch(`/api/admin/delete?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
         if (res.ok) {
           delete fileCategories[filename];
+          delete displayNames[filename];
           selectedFiles.delete(filename);
           showToast(`Deleted: ${filename}`);
           loadFiles();
@@ -595,7 +600,7 @@
       for (const name of list) {
         try {
           const res = await fetch(`/api/admin/delete?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
-          if (res.ok) { ok++; delete fileCategories[name]; }
+          if (res.ok) { ok++; delete fileCategories[name]; delete displayNames[name]; }
           else fail++;
         } catch { fail++; }
       }
@@ -644,13 +649,13 @@
         const { signedUrl, path } = await urlRes.json();
         const upRes = await fetch(signedUrl, { method: 'PUT', body: file, headers: { 'Content-Type': mimeMap[ext] || 'application/octet-stream' } });
         if (!upRes.ok) { showToast(`Upload failed: ${file.name} (${upRes.status})`, 'error'); return null; }
-        return path || file.name;
+        return { name: path || file.name, originalName: file.name };
       } catch (err) { showToast(`Upload error: ${file.name}`, 'error'); return null; }
     }
 
     // Batch-save file categories: read config ONCE, add all mappings, save ONCE
     // Batch-save file categories: read config ONCE, add all mappings, save ONCE
-    async function saveNewFileCategories(mappings) {
+    async function saveNewFileCategories(mappings, displayMap) {
       try {
         const res = await fetch('/api/admin/config');
         const cfg = await res.json();
@@ -661,6 +666,12 @@
         cfg.fileCategories = cfg.fileCategories || {};
         for (const [name, cat] of Object.entries(mappings)) {
           if (cat) cfg.fileCategories[name] = cat;
+        }
+        cfg.displayNames = cfg.displayNames || {};
+        if (displayMap) {
+          for (const [name, orig] of Object.entries(displayMap)) {
+            if (orig && orig !== name) cfg.displayNames[name] = orig;
+          }
         }
         const saveRes = await fetch('/api/admin/config', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -677,16 +688,19 @@
       const uploaded = [];
       for (let i = 0; i < zipFiles.length; i++) {
         uploadProgressText.textContent = `Uploading ${i+1}/${zipFiles.length}: ${zipFiles[i].name}`;
-        const name = await uploadFileSingle(zipFiles[i]);
-        if (name) uploaded.push(name);
+        const result = await uploadFileSingle(zipFiles[i]);
+        if (result) uploaded.push(result);
       }
       if (uploaded.length > 0) {
         const mappings = {};
-        for (const name of uploaded) {
+        const displayMap = {};
+        for (const { name, originalName } of uploaded) {
           if (cat) fileCategories[name] = cat;
           mappings[name] = cat;
+          if (originalName && originalName !== name) displayNames[name] = originalName;
+          displayMap[name] = originalName;
         }
-        await saveNewFileCategories(mappings);
+        await saveNewFileCategories(mappings, displayMap);
         await new Promise(r => setTimeout(r, 1500));
         loadFiles();
         showToast(`Uploaded ${uploaded.length} file(s)` + (cat ? ` as "${cat}"` : ' as Unorganized'));
@@ -705,12 +719,14 @@
         const blob = await zip.generateAsync({ type: 'blob' });
         const zipFile = new File([blob], zipName, { type: 'application/zip' });
         uploadProgressText.textContent = 'Uploading...';
-        const name = await uploadFileSingle(zipFile);
-        if (name) {
+        const result = await uploadFileSingle(zipFile);
+        if (result) {
+          const { name, originalName } = result;
           const mappings = {};
           if (cat) fileCategories[name] = cat;
           mappings[name] = cat;
-          await saveNewFileCategories(mappings);
+          if (originalName && originalName !== name) displayNames[name] = originalName;
+          await saveNewFileCategories(mappings, { [name]: originalName });
           await new Promise(r => setTimeout(r, 1500));
           loadFiles();
           showToast(`Uploaded: ${name}` + (cat ? ` as "${cat}"` : ' as Unorganized'));

@@ -82,7 +82,10 @@
     const tutorialContent = document.getElementById('tutorial-content');
     const tutorialClose = document.getElementById('tutorial-close');
 
+    let displayNames = {};
+
     function cleanName(name) {
+      if (displayNames[name]) return displayNames[name].replace(/\.(zip|mid|midi|txt)$/i, '');
       return name.replace(/\.(zip|mid|midi|txt)$/i, '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
@@ -115,6 +118,7 @@
         const config = await res.json();
         categories = ['All', ...(config.categories || [])];
         fileCategories = config.fileCategories || {};
+        displayNames = config.displayNames || {};
         if (config.tutorial) {
           tutorialTitle.textContent = config.tutorial.title || 'Tutorial';
           tutorialContent.textContent = config.tutorial.content || '';
