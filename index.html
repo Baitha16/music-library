@@ -53,6 +53,36 @@
     </div>
   </div>
 
+  <div class="overlay" id="sheet-overlay">
+    <div class="modal" style="max-width:600px">
+      <h2 id="sheet-title">Sheets</h2>
+      <pre id="sheet-content" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:13px;line-height:1.5;overflow:auto;max-height:60vh;white-space:pre-wrap;word-break:break-word;color:var(--text);margin-bottom:16px"></pre>
+      <div class="modal-actions">
+        <button class="btn btn-outline btn-sm" id="sheet-dl-btn">⬇ Download</button>
+        <button class="btn btn-primary btn-sm" id="sheet-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="report-overlay">
+    <div class="modal" style="max-width:500px">
+      <h2>⚠ Report File</h2>
+      <p style="color:var(--text);font-size:14px;margin-bottom:8px" id="report-filename"></p>
+      <select id="report-reason" style="width:100%;padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;margin-bottom:12px;outline:none">
+        <option value="">Select a reason…</option>
+        <option value="bad-quality">Bad quality MIDI</option>
+        <option value="wrong-category">Wrong category</option>
+        <option value="broken">Broken / doesn't play</option>
+        <option value="other">Other</option>
+      </select>
+      <textarea id="report-comment" placeholder="Optional comment…" style="width:100%;padding:10px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none;resize:vertical;min-height:60px;margin-bottom:16px;box-sizing:border-box"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-danger btn-sm" id="report-submit">Submit Report</button>
+        <button class="btn btn-outline btn-sm" id="report-close">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -202,18 +232,22 @@
         if (midFile && txtFile) {
           actionsHtml = `
             <a href="ezio://load?file=${encodeURIComponent(midFile.name)}&txt=${encodeURIComponent(txtFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>
-            <a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-outline btn-sm" download>📄 Sheets</a>
-            <button class="btn btn-outline btn-sm" onclick="downloadAsZip(['${midFile.name.replace(/'/g, "\\'")}','${txtFile.name.replace(/'/g, "\\'")}'],'${baseName.replace(/'/g, "\\'")}.zip')">⬇ Download</button>`;
+            <button class="btn btn-outline btn-sm" onclick="showSheet('${txtFile.name.replace(/'/g, "\\'")}')">📄 Sheets</button>
+            <button class="btn btn-outline btn-sm" onclick="downloadAsZip(['${midFile.name.replace(/'/g, "\\'")}','${txtFile.name.replace(/'/g, "\\'")}'],'${baseName.replace(/'/g, "\\'")}.zip')">⬇ Download</button>
+            <button class="btn btn-outline btn-sm" onclick="showReport('${baseName.replace(/'/g, "\\'")}')">⚠</button>`;
         } else if (midFile) {
-          actionsHtml = `<a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>`;
+          actionsHtml = `<a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>
+            <button class="btn btn-outline btn-sm" onclick="showReport('${baseName.replace(/'/g, "\\'")}')">⚠</button>`;
         } else if (txtFile) {
-          actionsHtml = `<a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-primary btn-sm">⬇ Download</a>`;
+          actionsHtml = `<a href="/api/download?name=${encodeURIComponent(txtFile.name)}" class="btn btn-primary btn-sm">⬇ Download</a>
+            <button class="btn btn-outline btn-sm" onclick="showReport('${baseName.replace(/'/g, "\\'")}')">⚠</button>`;
         } else if (zipFile) {
-          actionsHtml = `<a href="/api/download?name=${encodeURIComponent(zipFile.name)}" class="btn btn-primary btn-sm">⬇ Download</a>`;
+          actionsHtml = `<a href="/api/download?name=${encodeURIComponent(zipFile.name)}" class="btn btn-primary btn-sm">⬇ Download</a>
+            <button class="btn btn-outline btn-sm" onclick="showReport('${baseName.replace(/'/g, "\\'")}')">⚠</button>`;
         } else {
           actionsHtml = fGroup.map(f =>
             `<a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-outline btn-sm">⬇ ${f.name.split('.').pop()}</a>`
-          ).join('');
+          ).join('') + `<button class="btn btn-outline btn-sm" onclick="showReport('${baseName.replace(/'/g, "\\'")}')">⚠</button>`;
         }
 
         return `
@@ -261,6 +295,60 @@
     tutorialClose.addEventListener('click', () => tutorialOverlay.classList.remove('active'));
     tutorialOverlay.addEventListener('click', (e) => {
       if (e.target === tutorialOverlay) tutorialOverlay.classList.remove('active');
+    });
+
+    // Sheet popup
+    const sheetOverlay = document.getElementById('sheet-overlay');
+    const sheetTitle = document.getElementById('sheet-title');
+    const sheetContent = document.getElementById('sheet-content');
+    const sheetDlBtn = document.getElementById('sheet-dl-btn');
+    document.getElementById('sheet-close').addEventListener('click', () => sheetOverlay.classList.remove('active'));
+    sheetOverlay.addEventListener('click', (e) => { if (e.target === sheetOverlay) sheetOverlay.classList.remove('active'); });
+
+    async function showSheet(filename) {
+      sheetTitle.textContent = 'Sheets — ' + cleanName(filename);
+      sheetContent.textContent = 'Loading…';
+      sheetOverlay.classList.add('active');
+      sheetDlBtn.onclick = () => { const a = document.createElement('a'); a.href = '/api/download?name=' + encodeURIComponent(filename); a.download = filename; a.click(); };
+      try {
+        const res = await fetch('/api/download?name=' + encodeURIComponent(filename));
+        if (!res.ok) { sheetContent.textContent = 'Failed to load sheet.'; return; }
+        sheetContent.textContent = await res.text();
+      } catch { sheetContent.textContent = 'Failed to load sheet.'; }
+    }
+
+    // Report modal
+    const reportOverlay = document.getElementById('report-overlay');
+    const reportFilename = document.getElementById('report-filename');
+    const reportReason = document.getElementById('report-reason');
+    const reportComment = document.getElementById('report-comment');
+    let reportTargetName = '';
+    document.getElementById('report-close').addEventListener('click', closeReport);
+    reportOverlay.addEventListener('click', (e) => { if (e.target === reportOverlay) closeReport(); });
+
+    function closeReport() {
+      reportOverlay.classList.remove('active');
+      reportReason.value = '';
+      reportComment.value = '';
+    }
+
+    function showReport(baseName) {
+      reportTargetName = baseName;
+      reportFilename.textContent = 'File: ' + baseName;
+      reportOverlay.classList.add('active');
+    }
+
+    document.getElementById('report-submit').addEventListener('click', async () => {
+      const reason = reportReason.value;
+      if (!reason) { showToast('Please select a reason', 'error'); return; }
+      try {
+        const res = await fetch('/api/report', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: reportTargetName, reason, comment: reportComment.value })
+        });
+        if (res.ok) { showToast('Report submitted'); closeReport(); }
+        else { const e = await res.json(); showToast(e.error || 'Failed to submit', 'error'); }
+      } catch { showToast('Failed to submit report', 'error'); }
     });
 
     function showToast(msg, type = 'success') {

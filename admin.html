@@ -17,6 +17,7 @@
       <div class="header-actions">
         <button id="theme-toggle" class="btn-icon" title="Toggle theme">🌙</button>
         <a href="/" class="btn btn-outline btn-sm">Library</a>
+        <button id="reports-btn" class="btn btn-outline btn-sm" style="display:none">Reports</button>
         <button id="logout-btn" class="btn btn-outline btn-sm" style="display:none">Logout</button>
       </div>
     </header>
@@ -131,6 +132,16 @@
     </div>
   </div>
 
+  <div class="overlay" id="reports-overlay">
+    <div class="modal" style="max-width:600px">
+      <h2>📋 Reports</h2>
+      <div id="reports-list" style="max-height:50vh;overflow-y:auto;margin-bottom:16px;font-size:13px"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary btn-sm" id="reports-close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -163,6 +174,7 @@
     const loginBtn = document.getElementById('login-btn');
     const loginError = document.getElementById('login-error');
     const logoutBtn = document.getElementById('logout-btn');
+    const reportsBtn = document.getElementById('reports-btn');
     const adminContent = document.getElementById('admin-content');
     const fileGrid = document.getElementById('file-grid');
     const emptyState = document.getElementById('empty-state');
@@ -315,6 +327,7 @@
           loginOverlay.classList.remove('active');
           adminContent.style.display = 'block';
           logoutBtn.style.display = 'inline-flex';
+          reportsBtn.style.display = 'inline-flex';
           renderUploadCategorySelect();
           renderBulkDropdown();
           await loadConfig();
@@ -355,6 +368,7 @@
       isAdmin = false;
       adminContent.style.display = 'none';
       logoutBtn.style.display = 'none';
+      reportsBtn.style.display = 'none';
       loginOverlay.classList.add('active');
       passwordInput.value = '';
       passwordInput.focus();
@@ -789,6 +803,32 @@
     loginBtn.addEventListener('click', login);
     passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
     logoutBtn.addEventListener('click', logout);
+
+    const reportsOverlay = document.getElementById('reports-overlay');
+    const reportsList = document.getElementById('reports-list');
+    document.getElementById('reports-close').addEventListener('click', () => reportsOverlay.classList.remove('active'));
+    reportsOverlay.addEventListener('click', (e) => { if (e.target === reportsOverlay) reportsOverlay.classList.remove('active'); });
+    reportsBtn.addEventListener('click', async () => {
+      reportsList.innerHTML = '<p style="color:var(--text-muted)">Loading…</p>';
+      reportsOverlay.classList.add('active');
+      try {
+        const res = await fetch('/api/report');
+        if (!res.ok) { reportsList.innerHTML = '<p style="color:var(--text-muted)">Failed to load reports.</p>'; return; }
+        const { reports } = await res.json();
+        if (!reports || reports.length === 0) {
+          reportsList.innerHTML = '<p style="color:var(--text-muted)">No reports yet.</p>';
+          return;
+        }
+        reportsList.innerHTML = reports.slice().reverse().map(r =>
+          `<div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+            <div style="font-weight:600;color:var(--text-heading);margin-bottom:4px">${r.filename}</div>
+            <div style="color:var(--text-muted);font-size:12px">${r.reason}${r.comment ? ' — ' + r.comment : ''}</div>
+            <div style="color:var(--text-muted);font-size:11px;margin-top:4px">${new Date(r.reportedAt).toLocaleString()}</div>
+          </div>`
+        ).join('');
+      } catch { reportsList.innerHTML = '<p style="color:var(--text-muted)">Failed to load reports.</p>'; }
+    });
+
     checkAuth();
   </script>
 </body>
