@@ -6,7 +6,6 @@
   <title>Music Library</title>
   <link rel="stylesheet" href="/style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tone@14.9.19/build/Tone.js"></script>
 </head>
 <body>
   <div class="container">
@@ -65,23 +64,6 @@
       <div class="modal-actions">
         <button class="btn btn-outline btn-sm" id="license-cancel">Cancel</button>
         <button class="btn btn-primary btn-sm" id="license-submit">Verify</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="overlay" id="player-overlay">
-    <div class="modal" style="max-width:500px">
-      <h2 id="player-title">▶ Playing</h2>
-      <div style="text-align:center;margin-bottom:16px">
-        <p id="player-status" style="color:var(--text-muted);font-size:14px">Loading…</p>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px">
-        <button class="btn btn-primary" id="player-play-btn">▶ Play</button>
-        <button class="btn btn-outline" id="player-pause-btn">⏸ Pause</button>
-        <button class="btn btn-outline" id="player-stop-btn">⏹ Stop</button>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-outline btn-sm" id="player-close">Close</button>
       </div>
     </div>
   </div>
@@ -148,10 +130,6 @@
     let displayNames = {};
     let licenseInfo = null;
     let canDownload = false;
-    let playerSynth = null;
-    let playerPart = null;
-    let playerMidiData = null;
-
     function loadLicense() {
       try {
         const saved = localStorage.getItem('license');
@@ -310,20 +288,16 @@
         const zipFile = fGroup.find(f => f.name.match(/\.zip$/i));
 
         const dl = (file) => canDownload ? `<a href="/api/download?name=${encodeURIComponent(file.name)}" class="btn btn-outline btn-sm">⬇ Download</a>` : '';
-        const browserPlay = (file) => `<button class="btn btn-primary btn-sm" onclick="playMidi('${file.name.replace(/'/g, "\\'")}')">▶ Play</button>`;
-        const appPlay = (url, label) => `<a href="${url}" class="btn btn-outline btn-sm">${label}</a>`;
 
         let actionsHtml = '';
         if (midFile && txtFile) {
           actionsHtml = `
-            ${browserPlay(midFile)}
-            ${appPlay(`ezio://load?file=${encodeURIComponent(midFile.name)}&txt=${encodeURIComponent(txtFile.name)}`, 'Play on App')}
+            <a href="ezio://load?file=${encodeURIComponent(midFile.name)}&txt=${encodeURIComponent(txtFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>
             <button class="btn btn-outline btn-sm" onclick="showSheet('${txtFile.name.replace(/'/g, "\\'")}')">📄 Sheets</button>
             ${canDownload ? `<button class="btn btn-outline btn-sm" onclick="downloadAsZip(['${midFile.name.replace(/'/g, "\\'")}','${txtFile.name.replace(/'/g, "\\'")}'],'${baseName.replace(/'/g, "\\'")}.zip')">⬇ Download</button>` : ''}
             <button class="btn btn-outline btn-sm" onclick="showReport('${baseName.replace(/'/g, "\\'")}')">⚠</button>`;
         } else if (midFile) {
-          actionsHtml = `${browserPlay(midFile)}
-            ${appPlay(`ezio://load?file=${encodeURIComponent(midFile.name)}`, 'Play on App')}
+          actionsHtml = `<a href="ezio://load?file=${encodeURIComponent(midFile.name)}" class="btn btn-primary btn-sm">🎹 Play</a>
             ${dl(midFile)}
             <button class="btn btn-outline btn-sm" onclick="showReport('${baseName.replace(/'/g, "\\'")}')">⚠</button>`;
         } else if (txtFile) {
@@ -430,72 +404,6 @@
         }
       } catch { licenseError.textContent = 'Connection error'; licenseError.style.display = 'block'; }
     });
-
-    // MIDI player
-    const playerOverlay = document.getElementById('player-overlay');
-    const playerTitle = document.getElementById('player-title');
-    const playerStatus = document.getElementById('player-status');
-    let currentMidiFile = '';
-
-    document.getElementById('player-close').addEventListener('click', stopMidiPlayer);
-    playerOverlay.addEventListener('click', (e) => { if (e.target === playerOverlay) stopMidiPlayer(); });
-    document.getElementById('player-play-btn').addEventListener('click', resumeMidiPlayer);
-    document.getElementById('player-pause-btn').addEventListener('click', pauseMidiPlayer);
-    document.getElementById('player-stop-btn').addEventListener('click', stopMidiPlayer);
-
-    async function playMidi(filename) {
-      currentMidiFile = filename;
-      playerTitle.textContent = '▶ ' + cleanName(filename);
-      playerStatus.textContent = 'Loading…';
-      playerOverlay.classList.add('active');
-      stopMidiPlayer();
-      try {
-        const res = await fetch('/api/download?name=' + encodeURIComponent(filename) + '&stream=1');
-        if (!res.ok) { playerStatus.textContent = 'Failed to load file'; return; }
-        const buffer = await res.arrayBuffer();
-        const midi = new Tone.Midi(buffer);
-        playerMidiData = midi;
-        playerSynth = new Tone.PolySynth(Tone.Synth, { volume: -6 }).toDestination();
-        playerStatus.textContent = 'Ready — press Play';
-      } catch { playerStatus.textContent = 'Failed to load MIDI'; }
-    }
-
-    function resumeMidiPlayer() {
-      if (!playerMidiData || !playerSynth) return;
-      if (playerPart) { Tone.Transport.resume(); playerStatus.textContent = 'Playing…'; return; }
-      Tone.start();
-      const bpm = playerMidiData.header.tempos[0]?.bpm || 120;
-      Tone.Transport.bpm.value = bpm;
-      const allNotes = [];
-      playerMidiData.tracks.forEach(track => {
-        track.notes.forEach(n => {
-          allNotes.push([n.time, { note: n.name, dur: n.duration }]);
-        });
-      });
-      allNotes.sort((a, b) => a[0] - b[0]);
-      playerPart = new Tone.Part((time, note) => {
-        playerSynth.triggerAttackRelease(note.note, note.dur, time);
-      }, allNotes);
-      playerPart.start(0);
-      Tone.Transport.start();
-      playerStatus.textContent = 'Playing…';
-    }
-
-    function pauseMidiPlayer() {
-      Tone.Transport.pause();
-      if (playerStatus) playerStatus.textContent = 'Paused';
-    }
-
-    function stopMidiPlayer() {
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
-      if (playerPart) { playerPart.dispose(); playerPart = null; }
-      if (playerSynth) { playerSynth.dispose(); playerSynth = null; }
-      playerMidiData = null;
-      playerStatus.textContent = 'Stopped';
-      currentMidiFile = '';
-      playerOverlay.classList.remove('active');
-    }
 
     // Sheet popup
     const sheetOverlay = document.getElementById('sheet-overlay');
