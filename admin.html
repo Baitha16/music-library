@@ -58,6 +58,18 @@
             <label style="font-size:13px;color:#888;margin-top:8px">Content</label>
             <textarea id="tutorial-content-input" rows="6" class="settings-textarea"></textarea>
           </div>
+          <div class="settings-section">
+            <h4>License Keys</h4>
+            <div id="license-list" style="margin-bottom:12px"></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+              <button class="btn btn-outline btn-sm" onclick="genLicense('trial')">+ Trial</button>
+              <button class="btn btn-outline btn-sm" onclick="genLicense('weekly')">+ Weekly</button>
+              <button class="btn btn-outline btn-sm" onclick="genLicense('monthly')">+ Monthly</button>
+              <button class="btn btn-outline btn-sm" onclick="genLicense('yearly')">+ Yearly</button>
+              <button class="btn btn-outline btn-sm" onclick="genLicense('lifetime')">+ Lifetime</button>
+            </div>
+            <button class="btn btn-primary btn-sm" id="refresh-licenses-btn">Refresh</button>
+          </div>
           <button class="btn btn-primary" id="save-settings-btn" style="margin-top:12px">Save Settings</button>
         </div>
       </details>
@@ -331,6 +343,7 @@
           renderUploadCategorySelect();
           renderBulkDropdown();
           await loadConfig();
+          renderLicenses();
           await loadFiles();
         } else {
           loginOverlay.classList.add('active');
@@ -828,6 +841,73 @@
         ).join('');
       } catch { reportsList.innerHTML = '<p style="color:var(--text-muted)">Failed to load reports.</p>'; }
     });
+
+    // License management
+    const licenseList = document.getElementById('license-list');
+    document.getElementById('refresh-licenses-btn').addEventListener('click', renderLicenses);
+
+    async function renderLicenses() {
+      licenseList.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Loading…</p>';
+      try {
+        const res = await fetch('/api/admin/config');
+        const cfg = await res.json();
+        const licenses = cfg.licenses || {};
+        const entries = Object.entries(licenses);
+        if (entries.length === 0) {
+          licenseList.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No license keys yet.</p>';
+          return;
+        }
+        licenseList.innerHTML = entries.map(([key, data]) => {
+          const expires = data.expiresAt ? new Date(data.expiresAt).toLocaleDateString() : '—';
+          const badge = data.active ? '🟢' : '🔴';
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span style="font-family:monospace;flex:1">${key}</span>
+            <span style="color:var(--text-muted);width:70px">${data.type}</span>
+            <span style="color:var(--text-muted);width:80px">${expires}</span>
+            <button class="btn btn-outline btn-sm" onclick="toggleLicense('${key}')" title="Toggle active">${badge}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteLicense('${key}')">✕</button>
+          </div>`;
+        }).join('');
+      } catch { licenseList.innerHTML = '<p style="color:var(--text-muted)">Failed to load licenses.</p>'; }
+    }
+    window.renderLicenses = renderLicenses;
+
+    async function genLicense(type) {
+      try {
+        const res = await fetch('/api/admin/license', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generate', type })
+        });
+        if (res.ok) { showToast(`Generated ${type} key`); renderLicenses(); }
+        else { const e = await res.json(); showToast(e.error || 'Failed', 'error'); }
+      } catch { showToast('Failed to generate key', 'error'); }
+    }
+    window.genLicense = genLicense;
+
+    async function toggleLicense(key) {
+      try {
+        const res = await fetch('/api/admin/license', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'toggle', key })
+        });
+        if (res.ok) { showToast('Toggled'); renderLicenses(); }
+        else { const e = await res.json(); showToast(e.error || 'Failed', 'error'); }
+      } catch { showToast('Failed', 'error'); }
+    }
+    window.toggleLicense = toggleLicense;
+
+    async function deleteLicense(key) {
+      if (!confirm(`Delete license ${key}?`)) return;
+      try {
+        const res = await fetch('/api/admin/license', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', key })
+        });
+        if (res.ok) { showToast('Deleted'); renderLicenses(); }
+        else { const e = await res.json(); showToast(e.error || 'Failed', 'error'); }
+      } catch { showToast('Failed', 'error'); }
+    }
+    window.deleteLicense = deleteLicense;
 
     checkAuth();
   </script>
