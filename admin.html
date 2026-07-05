@@ -82,6 +82,7 @@
           <div class="c-dropdown-menu"></div>
         </div>
         <button id="bulk-cat-btn" class="btn btn-primary btn-sm">Change Category</button>
+        <button id="bulk-dl-btn" class="btn btn-outline btn-sm">⬇ Download Selected</button>
         <button id="bulk-delete-btn" class="btn btn-danger btn-sm">Delete Selected</button>
         <button id="bulk-clear-btn" class="btn btn-outline btn-sm" style="border-color:var(--text-muted);color:var(--text-muted)">✕</button>
       </div>
@@ -510,10 +511,7 @@
         return `<div class="file-card">${cbHtml}<div class="file-info"><div class="file-icon">${fileIcon(f.name)}</div><div>
           <div class="file-name" title="${f.name}">${cleanName(f.name)}</div>
           <div class="file-meta"><span class="cat-badge">${cat || 'Unorganized'}</span> ${formatSize(f.size)} &middot; ${formatDate(f.uploadedAt)}</div>
-        </div></div><div class="file-actions">
-          <a href="/api/download?name=${encodeURIComponent(f.name)}" class="btn btn-outline btn-sm">⬇ Download</a>
-          <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.name.replace(/'/g, "\\'")}')">Delete</button>
-        </div></div>`
+        </div></div></div>`
       }).join('');
       // Attach dropdown to each file card
       filtered.forEach(f => {
@@ -529,20 +527,6 @@
         badge.replaceWith(dropdown);
       });
       updateBulkBar();
-    }
-
-    async function deleteFile(filename) {
-      if (!confirm(`Delete "${filename}"?`)) return;
-      try {
-        const res = await fetch(`/api/admin/delete?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
-        if (res.ok) {
-          delete fileCategories[filename];
-          delete displayNames[filename];
-          selectedFiles.delete(filename);
-          showToast(`Deleted: ${filename}`);
-          loadFiles();
-        } else { const d = await res.json(); showToast(d.error || 'Delete failed', 'error'); }
-      } catch (err) { showToast('Delete failed', 'error'); }
     }
 
     // ============= MULTI-SELECT & BULK ACTIONS =============
@@ -607,6 +591,18 @@
       if (sel) sel.checked = allSelected;
     }
 
+    function bulkDownloadSelected() {
+      const list = Array.from(selectedFiles);
+      if (!list.length) return;
+      for (const name of list) {
+        const a = document.createElement('a');
+        a.href = '/api/download?name=' + encodeURIComponent(name);
+        a.download = name;
+        a.click();
+        a.remove();
+      }
+    }
+
     async function bulkDeleteSelected() {
       const list = Array.from(selectedFiles);
       if (!list.length) return;
@@ -639,6 +635,7 @@
       showToast(`Changed ${list.length} file(s) to "${cat}"`);
     }
 
+    document.getElementById('bulk-dl-btn').addEventListener('click', bulkDownloadSelected);
     document.getElementById('bulk-delete-btn').addEventListener('click', bulkDeleteSelected);
     document.getElementById('bulk-cat-btn').addEventListener('click', bulkChangeCategory);
     document.getElementById('bulk-clear-btn').addEventListener('click', () => {
